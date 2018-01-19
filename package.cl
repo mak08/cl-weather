@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2018-01-18 19:42:00>
+;;; Last Modified <michael 2018-01-19 22:26:43>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
@@ -11,6 +11,7 @@
         "CFFI"
         "CL-MAP")
   (:export
+   "*GRIB-FOLDER*"
    "CONSTANT-WIND-BUNDLE"
    "NOAA-BUNDLE"
    "DWD-ICON-BUNDLE"

@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2018-01-13 20:55:10>
+;;; Last Modified <michael 2018-01-19 22:18:20>
 
 (in-package :cl-weather)
 
@@ -187,6 +187,7 @@
                        "&bottomlat=-90"))
          (ftp-command
           (format () "curl -n \"~a\" -o ~a/~a" url dest-folder destfile)))
+    (log2:trace "~a" ftp-command)
     (uiop:run-program ftp-command)))
 
 
