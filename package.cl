@@ -1,14 +1,15 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2018-01-13 23:27:47>
+;;; Last Modified <michael 2018-01-18 19:42:00>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
         #+sbcl "SB-MOP"
         "CL-ECCODES"
         "LOCAL-TIME"
-        "CFFI")
+        "CFFI"
+        "CL-MAP")
   (:export
    "CONSTANT-WIND-BUNDLE"
    "NOAA-BUNDLE"
@@ -21,17 +22,7 @@
    "FC-TIME"
    "UPDATE-FORECAST-BUNDLE"
 
-   "LATLNG"
-   "MAKE-LATLNG"
-   "COPY-LATLNG"
-   "LATLNG-LATR"
-   "LATLNG-LNGR"
-   "LATLNG-LAT"
-   "LATLNG-LNG"
-
-   "BILINEAR"
-   "RAD"
-   "ANGLE"))
+   "BILINEAR"))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

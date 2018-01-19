@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2018-01-13 23:29:14>
+;;; Last Modified <michael 2018-01-18 19:42:12>
 
 (in-package :cl-weather)
 
@@ -44,35 +44,6 @@
           (array-dimensions
            (grib-values-u-array thing))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Lat&Lng
-;; TODO: A latlng should only be used to represent Google Maps coordinates.
-
-(defstruct latlng
-  (lat 0 :read-only t)
-  (lng 0 :read-only t)
-  latr%
-  lngr%)
-
-(defmethod print-object ((thing latlng) stream)
-  (format stream "[~3$, ~3$]" (latlng-lat thing) (latlng-lng thing)))
-
-(defun latlng-latr (latlng)
-  (or (latlng-latr% latlng)
-      (setf (latlng-latr% latlng)
-            (rad (latlng-lat latlng)))))
-
-(defun latlng-lngr (latlng)
-  (or (latlng-lngr% latlng)
-      (setf (latlng-lngr% latlng)
-            (rad (latlng-lng latlng)))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Conversion
-
-(defun rad (x)
-  (declare (double-float x))
-  (* (* 2d0 pi) (/ x 360d0)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Euclidian Norm
@@ -80,16 +51,6 @@
 (defun enorm (x y)
   (declare (double-float x y))
   (sqrt (+ (* x x) (* y y))))
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Converting GRIB U/V values to DEG
-
-(defun angle (u v)
-  (declare (double-float u v))
-  (let ((angle
-         (+ 180d0 (* 180d0 (/ (atan u v) pi)))))
-    angle))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Interpolation
