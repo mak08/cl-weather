@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2018-01-19 22:18:20>
+;;; Last Modified <michael 2018-01-21 03:45:21>
 
 (in-package :cl-weather)
 
@@ -75,7 +75,7 @@
   (let ((timestamp (when *noaa-forecast-bundle* (fcb-time *noaa-forecast-bundle*))))
     (log2:info "Updating NOAA forecast from ~a" timestamp)
     ;; Forecast is outdated, fetch new. The latest available cycle will should be 4:30
-    (let* ((new-timestamp (adjust-timestamp (now) (offset :hour -5)))
+    (let* ((new-timestamp (adjust-timestamp (now) (offset :minute (- (* 60 4)))))
            (date (format-timestring nil new-timestamp :format '((:year 4) (:month 2) (:day 2))))
            (cycle (* 6 (truncate (timestamp-hour new-timestamp) 6))))
       (log2:info "At ~a, looking for cycle ~a-~a" (now) date  cycle)
