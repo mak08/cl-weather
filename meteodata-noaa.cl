@@ -1,11 +1,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2018-01-21 03:45:21>
+;;; Last Modified <michael 2018-11-01 23:40:26>
 
 (in-package :cl-weather)
 
-;; (declaim (optimize speed (debug 0) (space 0) (safety 0)))
+;;; (declaim (optimize (speed 0) (debug 3) (space 0) (safety 0)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Retrieving NOAA wind forecasts
@@ -14,14 +14,20 @@
 ;;;    GRIB2 times are UTC
 ;;;    NOAA GFS forecasts are produced every 6hrs (four cycles per day)
 ;;;
+;;; Wind data
+;;;    Wind data is usually stored in two variables
+;;;    - UGRND: Zonal wind (wind from west is positive)
+;;;    - VGRND: Meridonal wind (wind from south is positive)
+;;;
 ;;; Forecast availability
-;;;    Cycle nn start to become available at nn+3:30 UTC:
-;;;     cycle 00 at 03:30Z
-;;;     cycle 06 at 09:30Z
-;;;     cycle 12 at 15:30Z
-;;;     cycle 18 at 21:30Z
-;;; The full cycle data is available after 1.5hrs
-
+;;;    Cycle nn starts to become available at nn+3:30 UTC.
+;;;    The full cycle data is available after 1.5hrs:
+;;;
+;;;    Cycle  First FC avail    Full FC avail
+;;;    00     03:30Z            05:00Z
+;;;    06     09:30Z            11:00Z
+;;;    12     15:30Z            17:00Z
+;;;    18     21:30Z            23:00Z
 
 (defvar *noaa-forecast-bundle* nil)
 
@@ -31,77 +37,229 @@
 ;;; API Functions
 
 (defclass noaa-bundle (forecast-bundle)
-  ((noaa-data :reader noaa-data :initarg :data)))
+  ((noaa-data :reader noaa-data :initarg :data)
+   (date :reader date :initarg :date)
+   (cycle :reader cycle :initarg :cycle)
+   (fc-hash :accessor %fc-hash :initform (make-hash-table))))
+
+(defmethod print-object ((thing noaa-bundle) stream)
+  (format stream "{NOAA Bundle Time ~a, Date ~a, Cycle ~a}"
+          (grib-forecast-time (noaa-data thing))
+          (date thing)
+          (cycle thing)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; LOAD-INITIAL-DATA
+;;;
+;;;  The first forecast of a cycle becomes available about 3:30h after the start
+;;;  of computation. After 5:00h all forecasts should be available. Sometimes the
+;;;  computation does not start or finish on time.
+
+(defmethod load-forecast-bundle ((bundle (eql 'noaa-bundle)))
+  (let ((avail-time (adjust-timestamp (now) (offset :minute (- 300)))))
+    (tagbody
+      :start
+      (let ((date (format-timestring nil avail-time :format '((:year 4) (:month 2) (:day 2))))
+            (cycle (* 6 (truncate (timestamp-hour avail-time :timezone +utc-zone+) 6))))
+        (log2:info "Latest fully available cycle: ~a-~a" date cycle)
+        (let* ((filenames (download-noaa-bundle date cycle))
+               (numfiles (length filenames)))
+          (when (< numfiles (length +noaa-forecast-offsets+))
+            ;; Move one cycle back in time
+            (log2:info "Found ~a files - backing up (incomplete)" numfiles)
+            (adjust-timestamp! avail-time (offset :minute (- 360)))
+            (go :start))
+          (let* ((grib (read-noaa-wind-data filenames))
+                 (noaa-bundle (make-instance 'noaa-bundle
+                                             :date date
+                                             :cycle cycle
+                                             :data grib)))
+            (setf *noaa-forecast-bundle* noaa-bundle)
+            (return-from load-forecast-bundle noaa-bundle)))))))
 
 (defmethod get-forecast-bundle ((datasource (eql 'noaa-bundle)))
-  *noaa-forecast-bundle*)
+  (or *noaa-forecast-bundle*
+      (setf  *noaa-forecast-bundle*
+             (load-forecast-bundle datasource))))
 
 (defmethod fcb-time ((bundle noaa-bundle))
   (let ((grib (noaa-data bundle)))
-    (gribfile-forecast-time grib)))
+    (grib-forecast-time grib)))
 
 (defmethod fcb-max-offset ((bundle noaa-bundle))
-  (let ((grib (noaa-data bundle)))
+  (let*
+      ((values (grib-data (noaa-data bundle)))
+       (last-values (find-if-not #'null values :from-end t)))
     (/
-     (grib-values-forecast-time (aref (gribfile-data grib)
-                                      (1- (length (gribfile-data grib)))))
+     (grib-values-offset last-values)
      60)))
 
 (defclass noaa-forecast (forecast)
-  ((noaa-bundle :reader noaa-bundle :initarg :bundle)
-   (fc-time :reader fc-time :initarg :time)))
+  ((fc-grib :reader fc-grib :initarg :grib)
+   (fc-time :reader fc-time :initarg :time)
+   (fc-offset :reader fc-offset :initarg :offset :documentation "Offset from first forecast in minutes")
+   (fc-hash :accessor fc-hash% :initform (make-hash-table))))
+
+(defmethod print-object ((thing noaa-forecast) stream)
+  (let ((cycle (grib-cycle (fc-grib thing))))
+    (format stream "{NOAA Forecast @ ~a, Offset ~a, Cycle ~a::~a}"
+            (fc-time thing)
+            (fc-offset thing)
+            (format-timestring nil cycle :format '(:year "-" (:month 2) "-" (:day 2)) :timezone +utc-zone+)
+            (timestamp-hour cycle :timezone +utc-zone+))))
 
 (defmethod get-forecast ((bundle noaa-bundle) (utc-time local-time:timestamp))
-  (make-instance 'noaa-forecast :bundle bundle :time utc-time))
+  ;; New procedure:
+  ;; - Round time to minute
+  ;; - Check if forecast exists at bundle and is still valid
+  (let* ((fc-time (timestamp-minimize-part utc-time :sec))
+         (fc-offset (truncate
+                     (/ (timestamp-difference fc-time (fcb-time bundle))
+                        60))))
+    (or (gethash fc-offset (%fc-hash bundle))
+        (setf (gethash fc-offset (%fc-hash bundle))
+              (make-instance 'noaa-forecast
+                             :grib (noaa-data bundle)
+                             :time fc-time
+                             :offset fc-offset)))))
 
 (defmethod get-wind-forecast ((forecast noaa-forecast) latlng)
-  (let* ((bundle
-          (noaa-bundle forecast)) 
-         (grib
-          (noaa-data bundle))
-         (offset
-          ;; Minute offset 
-          (truncate
-           (/ (timestamp-difference (fc-time forecast) (fcb-time bundle))
-              60))))
-    (get-interpolated-wind grib offset (latlng-lat latlng) (latlng-lng latlng))))
+  ;; New interpolation procedure:
+  ;; - Round position to Second / 10Seconds ?
+  ;; - Perform bilinear interpolation of the required supporting points (cached) to the fc time
+  ;; - Perform bilinear interpolation to the required latlng.
+  (let* ((lat (latlng-lat latlng))
+         (lng% (latlng-lng latlng))
+         (lng   (if (< lng% 0d0)
+                    (+ lng% 360d0)
+                    lng%))
+         (grib (fc-grib forecast))
+         (offset (fc-offset forecast))
+         (i-inc (grib-i-inc grib))
+         (j-inc (grib-j-inc grib))
+         (lat0 (* (ffloor lat j-inc) j-inc))
+         (lng0 (* (ffloor lng i-inc) i-inc))
+         (lat1 (+ lat0 j-inc))
+         (lng1 (+ lng0 i-inc))
+         (w00
+          (time-interpolate grib offset lat0 lng0))
+         (w01
+          (time-interpolate grib offset lat0 lng1))
+         (w10
+          (time-interpolate grib offset lat1 lng0))
+         (w11
+          (time-interpolate grib offset lat1 lng1)))
+    (let* ((u (bilinear lng lat lng0 lng1 lat0 lat1 (wind-u w00) (wind-u w01) (wind-u w10) (wind-u w11)))
+           (v (bilinear lng lat lng0 lng1 lat0 lat1 (wind-v w00) (wind-v w01) (wind-v w10) (wind-v w11)))
+           (s (bilinear lng lat lng0 lng1 lat0 lat1
+                        (enorm (wind-u w00) (wind-v w00))
+                        (enorm (wind-u w01) (wind-v w01))
+                        (enorm (wind-u w10) (wind-v w10))
+                        (enorm (wind-u w11) (wind-v w11)))))
+      (values (angle u v)
+              s))))
 
+(defmethod update-forecast-bundle ((bundle (eql 'noaa-bundle)) &key)
+  (timers:add-timer (lambda ()
+                      (let ((noaa-bundle (get-forecast-bundle bundle)))
+                        (shift-forecast-bundle noaa-bundle)
+                        (update-noaa-bundle noaa-bundle)))
+                    :hours '(3 9 15 21)
+                    :minutes '(30)))
+
+;;; API Functions
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; SHIFT-FORECAST-BUNDLE
+;;;
+;;;   Move bundle base time forward 6hrs, adjust forecast offsets
+;;:   and discard expired forecasts. Also discard 12h forecasts.
+
+(defmethod shift-forecast-bundle ((bundle noaa-bundle))
+  (adjust-timestamp! (grib-forecast-time (noaa-data bundle)) (offset :minute 360))
+  ;; cycle timestamp is shared!
+  (adjust-timestamp! (grib-cycle (noaa-data bundle)) (:offset :hour 6))
+  (let ((new-data (make-array 93 :initial-element nil))
+        (old-data (grib-data (noaa-data bundle))))
+    (loop
+       :for k :below 81
+       :do (progn
+             ;; Move forecasts 'left', discarding the oldest two forecasts
+             (setf (aref new-data k) 
+                   (aref old-data (+ k 2)))
+             ;; Adjust cycle & offsets to new bundle base time.
+             ;; Rightmost positions remain NULL. Don't attempt to adjust them
+             ;; (if we shift again before the positions are re-filled).
+             (when (aref new-data k)
+               (setf (grib-values-outdated (aref new-data k)) t)
+               (decf (grib-values-offset (aref new-data k))
+                     360))))
+    (setf (grib-data (noaa-data bundle))
+          new-data)))
+
+  
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Update data
 
-(defmethod update-forecast-bundle ((bundle (eql 'noaa-bundle)) &key (stepwidth 3))
-  ;; If we don't have files, or if newer files than we have should be available,
-  ;; update to the latest available files.
-  (let ((timestamp (when *noaa-forecast-bundle* (fcb-time *noaa-forecast-bundle*))))
-    (log2:info "Updating NOAA forecast from ~a" timestamp)
-    ;; Forecast is outdated, fetch new. The latest available cycle will should be 4:30
-    (let* ((new-timestamp (adjust-timestamp (now) (offset :minute (- (* 60 4)))))
-           (date (format-timestring nil new-timestamp :format '((:year 4) (:month 2) (:day 2))))
-           (cycle (* 6 (truncate (timestamp-hour new-timestamp) 6))))
-      (log2:info "At ~a, looking for cycle ~a-~a" (now) date  cycle)
-      (tagbody
-        :start
-        (let* ((filenames (download-noaa-bundle date cycle))
-               (numfiles (length filenames))
-               (allfiles (length +noaa-forecast-offsets+)))
-          (when (and (>= numfiles 1)
-                     (or (null *noaa-forecast-bundle*)
-                         (>= numfiles 41)))
-            (let ((data (read-noaa-wind-data filenames)))
-              (ecase stepwidth
-                (1
-                 (setf data (insert-interpolated-forecasts data)))
-                (3))
-              (setf *noaa-forecast-bundle*
-                    (make-instance 'noaa-bundle
-                                   :data data
-                                   :stepwidth stepwidth))))
-          (log2:info "Have ~a/~a files" numfiles allfiles)
-          (when (< numfiles allfiles)
-            (log2:info "Retrying in 10min")
-            (sleep 600)
-            (go :start))
-          (log2:info "Done"))))))
+(defun update-noaa-bundle (bundle)
+  (multiple-value-bind (date cycle)
+      (current-cycle)
+    (log2:info "Updating to cycle ~a-~a" date cycle)
+    (loop
+       :with start-time = (now)
+       :for offset :across +noaa-forecast-offsets+
+       :do (multiple-value-bind (directory spec destfile)
+               (noaa-spec-and-destfile date :cycle cycle :offset offset)
+             (when (> (timestamp-difference (now) start-time) (* 60 60 3))
+               (log2:error "Giving up at offset ~a" offset)
+               (return-from update-noaa-bundle))
+             (let ((destpath (format () "~a/~a" *grib-folder* destfile)))
+               (cond
+                 ((probe-file destpath)
+                  (log2:info "File exists: ~a(~a:~a))" destpath date cycle))
+                 (t
+                  (tagbody
+                    :retry
+                    (cond
+                      ((not (noaa-grib-exists-p date cycle spec))
+                       (log2:info "Wait 1min for ~a/~a" date spec)
+                       (sleep 60)
+                       (go :retry))
+                      (t
+                       (log2:info "Downloading ~a/~a" date spec)
+                       (multiple-value-bind
+                             (out error-out status)
+                           (download-noaa-file% directory spec destfile)))))))
+               (merge-noaa-bundles (noaa-data bundle)
+                                   (read-noaa-wind-data (list destpath)))))))
+  (log2:info "Done."))
+
+
+(defun merge-noaa-bundles (target source)
+  ;; Expect same timestamp
+  (assert (timestamp=
+           (grib-cycle target)
+           (grib-cycle source)))
+  ;; Expect one forecast in source
+  (assert (eql (length (grib-data source)) 1))
+  ;; Determine index of source forecast
+  (let* ((new-fc (aref (grib-data source) 0))
+         (target-index (fc-index new-fc)))
+    (log2:info "Offset: ~a" target-index)
+    (setf (aref (grib-data target) target-index) new-fc)))
+
+;; Determine index of forecast in the bundle
+(defun fc-index (grib-values)
+  (position (/ (grib-values-offset grib-values) 60) +noaa-forecast-offsets+ :test #'eql))
+
+(defun current-cycle ()
+  ;; The next cycle becomes available about 3:30h after the forecast computation starts.
+  (let* ((avail-time (adjust-timestamp (now) (offset :minute (- 210))))
+         (date (format-timestring nil avail-time :format '((:year 4) (:month 2) (:day 2))))
+         (cycle (* 6 (truncate (timestamp-hour avail-time :timezone +utc-zone+) 6))))
+    (values date cycle)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Download forecasts from NOAA.
@@ -169,7 +327,19 @@
                  (error "cURL error ~a" status))))))
       destpath)))
 
-(defun download-noaa-file% (directory spec destfile &key  (resolution "1p00"))
+(defun noaa-grib-exists-p (date cycle spec)
+  "Retrieve the GRIB file valid at timestamp according to VR rules"
+  (let* ((url
+          (format nil "http://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/gfs.~a~2,,,'0@a/~a" date cycle spec))
+         (command
+          (format () "curl -sfI ~a" url)))
+    (log2:info "~a" command)
+    (handler-case 
+        (null (uiop:run-program command))
+      (uiop/run-program:subprocess-error ()
+        nil))))
+
+(defun download-noaa-file% (directory spec destfile &key (resolution "1p00"))
   "Retrieve the GRIB file valid at timestamp according to VR rules"
   (let* ((dest-folder
           *grib-folder*)
@@ -205,59 +375,59 @@
     (get-values-from-index index)))
 
 
-(defun insert-interpolated-forecasts (gribfile)
-  (let* ((forecasts (gribfile-data gribfile))
-         (interpolated-forecasts
-          (make-array (* (1- (length forecasts)) 3))))
-    (loop
-       :for i :below (1- (length forecasts))
-       :do (progn
-             (setf (aref interpolated-forecasts (* i 3))
-                   (aref forecasts i))
-             (setf (aref interpolated-forecasts (+ (* i 3) 1))
-                   (interpolate-forecast (aref forecasts i) (aref forecasts (1+ i)) (/ 1 3)))
-             (setf (aref interpolated-forecasts (+ (* i 3) 2))
-                   (interpolate-forecast (aref forecasts i) (aref forecasts (1+ i)) (/ 2 3)))))
-    (setf (gribfile-data gribfile)
-          interpolated-forecasts)
-    gribfile))
+(defun time-interpolate (grib offset lat lon)
+  (let ((index
+         (position offset (grib-data grib)
+                   :test #'<=
+                   :key #'grib-values-offset))
+        (array-offset
+         (array-offset grib lat lon)))
+    (when (null index)
+      (error "No data for offset ~a" offset))
+    (multiple-value-bind (u1 v1 t1)
+        (grib-get-uv grib index array-offset)
+      (cond
+        ((eql index 0)
+         (make-wind :u u1 :v v1))
+        (t
+         (multiple-value-bind (u0 v0 t0)
+             (grib-get-uv grib (1- index) array-offset)
+           (let*
+               ((fraction (/
+                           (-  offset (grib-values-offset t0))
+                           (- (grib-values-offset t1) (grib-values-offset t0))))
+                (s0 (enorm u0 v0))
+                (s1 (enorm u1 v1))
+                (u (linear fraction u0 u1))
+                (v (linear fraction v0 v1))
+                (a (atan u v)))
+             (make-wind :u u :v v))))))))
 
-(defun interpolate-forecast (t0 t1 fraction)
-  (let* ((t0-u (grib-values-u-array t0))
-         (t0-v (grib-values-v-array t0))
-         (t1-u (grib-values-u-array t1))
-         (t1-v (grib-values-v-array t1))
-         (dimensions (array-dimensions t0-u))
-         (result-u (make-array dimensions :element-type 'double-float))
-         (result-v (make-array dimensions :element-type 'double-float)))
-    (log2:trace "dim:~a t=~a"
-               dimensions
-               (+ (grib-values-forecast-time t0)
-                                        (* fraction (- (grib-values-forecast-time t1)
-                                                       (grib-values-forecast-time t0)))))
-    (loop
-       :for u0 :across t0-u
-       :for u1 :across t1-u
-       :for v0 :across t0-v
-       :for v1 :across t1-v
-       :for i :from 0
-       :for s0 = (enorm u0 v0)
-       :for s1 = (enorm u1 v1)
-       :for s = (+ s0 (* fraction (- s1 s0)))
-       :for u = (+ u0 (* fraction (- u1 u0)))
-       :for v = (+ v0 (* fraction (- v1 v0)))
-       :for a = (atan u v)
-       :do (multiple-value-bind (u v)
-               (p2c a s)
-             (setf (aref result-u i)
-                   u
-                   (aref result-v i)
-                   v)))
-    (make-grib-values :forecast-time (+ (grib-values-forecast-time t0)
-                                        (* fraction (- (grib-values-forecast-time t1)
-                                                       (grib-values-forecast-time t0))))
-                      :u-array result-u
-                      :v-array result-v)))
+(defun grib-get-uv (grib time-index array-offset)
+  (let*
+      ((t1 (aref (grib-data grib) time-index))
+       (u1 (aref (grib-values-u-array t1) array-offset))
+       (v1 (aref (grib-values-v-array t1) array-offset)))
+    (values u1 v1 t1)))
+
+(defun array-offset (grib lat lon)
+  (let*
+      ((j-scan-pos-p (eql (grib-j-scan-pos grib) 1))
+       (i-inc (grib-i-inc grib))
+       (j-inc (grib-j-inc grib))
+       (lat0 (grib-lat-start grib))
+       (lon0 (grib-lon-start grib))
+       (olat (if j-scan-pos-p (- lat lat0) (- lat0 lat)))
+       (olon (- lon lon0))
+       (lat-index (floor olat j-inc))
+       (lon-index (floor olon i-inc))
+       (lonpoints (grib-lon-points grib))
+       (lat-offset (* lat-index lonpoints))
+       (array-offset (+ lat-offset lon-index)))
+    array-offset))
+    
+(defun linear (fraction a b)
+  (+ a (* fraction (- b a))))
 
 (defun p2c (a r)
   (let ((c (cis a)))

@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description    Download, process and provide DWD ICON wind data
 ;;; Author         Michael Kappert 2017
-;;; Last Modified <michael 2018-01-13 21:03:09>
+;;; Last Modified <michael 2018-05-29 18:07:52>
 
 (in-package :cl-weather)
 
@@ -45,7 +45,7 @@
   
 (defmethod fcb-time ((bundle dwd-icon-bundle))
   (let ((grib (dwd-icon-data bundle)))
-    (gribfile-forecast-time grib)))
+    (grib-forecast-time grib)))
 
 (defmethod fcb-max-offset ((bundle dwd-icon-bundle))
   72)

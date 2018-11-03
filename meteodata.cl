@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Meteorological Data
 ;;; Author         Michael Kappert 2017
-;;; Last Modified <michael 2018-01-13 20:54:10>
+;;; Last Modified <michael 2018-09-19 12:17:22>
 
 (in-package :cl-weather)
 
@@ -43,9 +43,15 @@
 ;;; ===========
 ;;; Datasources
 ;;; ===========
-;;; Returns a forecast bundle from the datasource.
-;;; Methods should use EQL-specializers on the forecast-bundle class name.
 
+;;; Load current forecast bundle from the datasource (initial load).
+;;; Overwrite previously loaded data.
+(defgeneric load-forecast-bundle (datasource)
+  )
+
+;;; Returns the currently loaded forecast bundle from the datasource.
+;;; Implicitely load bundle if necessary.
+;;; Methods should use EQL-specializers on the forecast-bundle class name.
 (defgeneric get-forecast-bundle (datasource)
   )
 

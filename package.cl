@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2018-01-19 22:26:43>
+;;; Last Modified <michael 2018-09-19 15:31:32>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
@@ -16,6 +16,7 @@
    "NOAA-BUNDLE"
    "DWD-ICON-BUNDLE"
    "GET-FORECAST-BUNDLE"
+   "LOAD-FORECAST-BUNDLE"
    "FCB-TIME"
    "FCB-MAX-OFFSET"
    "GET-FORECAST"

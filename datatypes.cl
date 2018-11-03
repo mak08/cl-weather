@@ -1,15 +1,17 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2018-01-18 19:42:12>
+;;; Last Modified <michael 2018-10-17 21:30:35>
 
 (in-package :cl-weather)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defstruct gribfile
+(defstruct grib
+
   "Basic / common GRIB data"
   forecast-time                 ; The timestamp (yyyymmdd, hh) of the forecast (identical with the first forecast in the bundle)
+  cycle                         ; Forecast cycle/date
   grid-size                     ; Number of data points, should equal lat-points * lon-points
   step-units
   lat-start lat-end lat-points  ; Start, end and number of points along parallel
@@ -19,31 +21,35 @@
   data                          ; Array of forecast data for successive forecast times
   )
 
-(defmethod print-object ((thing gribfile) stream)
-  (format stream "{gribfile <~a,~a>/<~a,~a> ~a}"
-          (gribfile-lat-start thing)
-          (gribfile-lon-start thing)
-          (gribfile-lat-end thing)
-          (gribfile-lon-end thing)
-          (gribfile-forecast-time thing)))
-
-(defstruct grib-filespec
-  region
-  resolution
-  date)
+(defmethod print-object ((thing grib) stream)
+  (format stream "{grib <~a,~a>/<~a,~a> ~a}"
+          (grib-lat-start thing)
+          (grib-lon-start thing)
+          (grib-lat-end thing)
+          (grib-lon-end thing)
+          (grib-forecast-time thing)))
 
 (defstruct grib-values
-  forecast-time                 ; 
+  cycle
+  offset                 ; 
   u-array
   v-array
-  vmax-data)
+  vmax-data
+  outdated)
 
 (defmethod print-object ((thing grib-values) stream)
   (format stream "{grib-values ~a ~a}"
-          (grib-values-forecast-time thing)
+          (grib-values-offset thing)
           (array-dimensions
            (grib-values-u-array thing))))
 
+
+(defstruct wind u v)
+
+(defmethod print-object ((thing wind) stream)
+  (format stream "(Speed ~a Dir ~a)"
+          (enorm (wind-u thing) (wind-v thing))
+          (angle (wind-u thing) (wind-v thing))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Euclidian Norm
