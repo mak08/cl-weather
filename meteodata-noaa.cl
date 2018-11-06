@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2018-11-01 23:40:26>
+;;; Last Modified <michael 2018-11-07 00:09:02>
 
 (in-package :cl-weather)
 
@@ -56,26 +56,16 @@
 ;;;  computation does not start or finish on time.
 
 (defmethod load-forecast-bundle ((bundle (eql 'noaa-bundle)))
-  (let ((avail-time (adjust-timestamp (now) (offset :minute (- 300)))))
-    (tagbody
-      :start
-      (let ((date (format-timestring nil avail-time :format '((:year 4) (:month 2) (:day 2))))
-            (cycle (* 6 (truncate (timestamp-hour avail-time :timezone +utc-zone+) 6))))
-        (log2:info "Latest fully available cycle: ~a-~a" date cycle)
-        (let* ((filenames (download-noaa-bundle date cycle))
-               (numfiles (length filenames)))
-          (when (< numfiles (length +noaa-forecast-offsets+))
-            ;; Move one cycle back in time
-            (log2:info "Found ~a files - backing up (incomplete)" numfiles)
-            (adjust-timestamp! avail-time (offset :minute (- 360)))
-            (go :start))
-          (let* ((grib (read-noaa-wind-data filenames))
-                 (noaa-bundle (make-instance 'noaa-bundle
-                                             :date date
-                                             :cycle cycle
-                                             :data grib)))
-            (setf *noaa-forecast-bundle* noaa-bundle)
-            (return-from load-forecast-bundle noaa-bundle)))))))
+  (multiple-value-bind (filenames date cycle cycle-start-time)
+      (download-complete-bundle)
+    (let* ((grib (read-noaa-wind-data filenames))
+           (noaa-bundle (make-instance 'noaa-bundle
+                                       :date date
+                                       :cycle cycle
+                                       :data grib)))
+      (setf *noaa-forecast-bundle* noaa-bundle)
+      (when (cycle-updating-p)
+        (update-forecast-bundle bundle)))))
 
 (defmethod get-forecast-bundle ((datasource (eql 'noaa-bundle)))
   (or *noaa-forecast-bundle*
@@ -160,16 +150,66 @@
               s))))
 
 (defmethod update-forecast-bundle ((bundle (eql 'noaa-bundle)) &key)
-  (timers:add-timer (lambda ()
-                      (let ((noaa-bundle (get-forecast-bundle bundle)))
-                        (shift-forecast-bundle noaa-bundle)
-                        (update-noaa-bundle noaa-bundle)))
-                    :hours '(3 9 15 21)
-                    :minutes '(30)))
+  (let ((noaa-bundle (get-forecast-bundle bundle)))
+    (shift-forecast-bundle noaa-bundle)
+    (update-noaa-bundle noaa-bundle)))
 
 ;;; API Functions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; DOWNLOAD-COMPLETE-BUNDLE
+;;;    
+;;;   Search backwards from $start to find a complete bundle (93 forecasts)
+
+(defun download-complete-bundle (&optional (start (now)))
+  ;; Retry to download starting with the latest available cycle
+  ;; going backward in time if necessary.
+  ;; Return list of filenames
+  (let ((timepoint start))
+    (tagbody
+      :start
+      (multiple-value-bind (date cycle cycle-start-time)
+          (latest-complete-cycle timepoint)
+        (log2:info "Trying download: ~a-~a" date cycle)
+        (let* ((filenames (download-noaa-bundle date cycle))
+               (numfiles (length filenames)))
+          (cond
+            ((< numfiles (length +noaa-forecast-offsets+))
+             ;; Move one cycle back in time
+             (log2:info "Found ~a files - backing up (incomplete)" numfiles)
+             (setf timepoint
+                   (adjust-timestamp timepoint (offset :minute (- 360))))
+             (let ((delta (truncate (timestamp-difference start timepoint) 3600)))
+               (log2:info "Looking back ~ah" delta)
+               (if (< delta 48)
+                   (go :start)
+                   (error "Incomplete downloads"))))
+            (t
+             (return-from download-complete-bundle
+               (values filenames
+                       date
+                       cycle
+                       cycle-start-time)))))))))
+
+(defun latest-complete-cycle (&optional (time (now)))
+  ;; Determine the latest cycle that should'be complete (theoretically) at the given time
+  (let* ((cycle-start-time 
+          (timestamp-minimize-part (adjust-timestamp time (offset :minute (- 300)))
+                                   :min
+                                   :timezone +utc-zone+))
+         (date (format-timestring nil cycle-start-time :format '((:year 4) (:month 2) (:day 2))))
+         (cycle (* 6 (truncate (timestamp-hour cycle-start-time :timezone +utc-zone+) 6))))
+    (values date
+            cycle
+            cycle-start-time)))
+
+(defun cycle-updating-p (&optional (time (now)))
+  (< 210 (mod (day-minute time) 360) 300))
+
+(defun day-minute (&optional (time (now)))
+  (+ (* (timestamp-hour time :timezone +utc-zone+) 60) (timestamp-minute time :timezone +utc-zone+)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; SHIFT-FORECAST-BUNDLE
@@ -199,7 +239,6 @@
     (setf (grib-data (noaa-data bundle))
           new-data)))
 
-  
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Update data
 
@@ -210,6 +249,7 @@
     (loop
        :with start-time = (now)
        :for offset :across +noaa-forecast-offsets+
+       :for index :from 0
        :do (multiple-value-bind (directory spec destfile)
                (noaa-spec-and-destfile date :cycle cycle :offset offset)
              (when (> (timestamp-difference (now) start-time) (* 60 60 3))
@@ -233,22 +273,31 @@
                              (out error-out status)
                            (download-noaa-file% directory spec destfile)))))))
                (merge-noaa-bundles (noaa-data bundle)
+                                   index
                                    (read-noaa-wind-data (list destpath)))))))
   (log2:info "Done."))
 
 
-(defun merge-noaa-bundles (target source)
+(defun merge-noaa-bundles (target-bundle target-index source-bundle)
   ;; Expect same timestamp
   (assert (timestamp=
-           (grib-cycle target)
-           (grib-cycle source)))
+           (grib-cycle target-bundle)
+           (grib-cycle source-bundle)))
   ;; Expect one forecast in source
-  (assert (eql (length (grib-data source)) 1))
-  ;; Determine index of source forecast
-  (let* ((new-fc (aref (grib-data source) 0))
-         (target-index (fc-index new-fc)))
-    (log2:info "Offset: ~a" target-index)
-    (setf (aref (grib-data target) target-index) new-fc)))
+  (assert (eql (length (grib-data source-bundle)) 1))
+  ;; Determine offset of source forecast
+  (let* ((source-fc (aref (grib-data source-bundle) 0))
+         (source-offset (grib-values-offset source-fc)))
+    (log2:trace "Source offset: ~a" source-offset)
+    (case source-offset
+      (360
+       (setf (aref (grib-data target-bundle) target-index)
+             (interpolate-forecast (aref (grib-data target-bundle) target-index) source-fc 0.33)))
+      (540
+       (setf (aref (grib-data target-bundle) target-index)
+             (interpolate-forecast (aref (grib-data target-bundle) target-index) source-fc 0.67)))
+      (otherwise
+       (setf (aref (grib-data target-bundle) target-index) source-fc)))))
 
 ;; Determine index of forecast in the bundle
 (defun fc-index (grib-values)
@@ -260,6 +309,44 @@
          (date (format-timestring nil avail-time :format '((:year 4) (:month 2) (:day 2))))
          (cycle (* 6 (truncate (timestamp-hour avail-time :timezone +utc-zone+) 6))))
     (values date cycle)))
+
+(defun interpolate-forecast (old new fraction)
+  ;; Interpolate two value sets from different cycles
+  (let* ((old-u (grib-values-u-array old))
+         (old-v (grib-values-v-array old))
+         (new-u (grib-values-u-array new))
+         (new-v (grib-values-v-array new))
+         (dimensions (array-dimensions old-u))
+         (result-u (make-array dimensions :element-type 'double-float))
+         (result-v (make-array dimensions :element-type 'double-float)))
+    (log2:trace "dim:~a t=~a"
+               dimensions
+               (+ (grib-values-offset old)
+                                        (* fraction (- (grib-values-offset new)
+                                                       (grib-values-offset old)))))
+    (loop
+       :for u0 :across old-u
+       :for u1 :across new-u
+       :for v0 :across old-v
+       :for v1 :across new-v
+       :for i :from 0
+       :for s0 = (enorm u0 v0)
+       :for s1 = (enorm u1 v1)
+       :for s = (+ s0 (* fraction (- s1 s0)))
+       :for u = (+ u0 (* fraction (- u1 u0)))
+       :for v = (+ v0 (* fraction (- v1 v0)))
+       :for a = (atan u v)
+       :do (multiple-value-bind (u v)
+               (p2c a s)
+             (setf (aref result-u i)
+                   u
+                   (aref result-v i)
+                   v)))
+
+    (make-grib-values :cycle (grib-values-cycle new)
+                      :offset (grib-values-offset new)
+                      :u-array result-u
+                      :v-array result-v)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Download forecasts from NOAA.
@@ -398,10 +485,13 @@
                            (- (grib-values-offset t1) (grib-values-offset t0))))
                 (s0 (enorm u0 v0))
                 (s1 (enorm u1 v1))
+                (s (linear fraction s0 s1))
                 (u (linear fraction u0 u1))
                 (v (linear fraction v0 v1))
                 (a (atan u v)))
-             (make-wind :u u :v v))))))))
+             (multiple-value-bind (u v)
+                 (p2c a s)
+               (make-wind :u u :v v)))))))))
 
 (defun grib-get-uv (grib time-index array-offset)
   (let*
