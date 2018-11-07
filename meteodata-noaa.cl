@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2018-11-07 00:09:02>
+;;; Last Modified <michael 2018-11-07 17:58:20>
 
 (in-package :cl-weather)
 
@@ -272,13 +272,13 @@
                        (multiple-value-bind
                              (out error-out status)
                            (download-noaa-file% directory spec destfile)))))))
-               (merge-noaa-bundles (noaa-data bundle)
-                                   index
-                                   (read-noaa-wind-data (list destpath)))))))
+               (merge-forecasts (noaa-data bundle)
+                                index
+                                (read-noaa-wind-data (list destpath)))))))
   (log2:info "Done."))
 
 
-(defun merge-noaa-bundles (target-bundle target-index source-bundle)
+(defun merge-forecasts (target-bundle target-index source-bundle)
   ;; Expect same timestamp
   (assert (timestamp=
            (grib-cycle target-bundle)
@@ -290,12 +290,12 @@
          (source-offset (grib-values-offset source-fc)))
     (log2:trace "Source offset: ~a" source-offset)
     (case source-offset
+      ((0 180) 
+       ;; Don't replace in the past
+       )
       (360
        (setf (aref (grib-data target-bundle) target-index)
-             (interpolate-forecast (aref (grib-data target-bundle) target-index) source-fc 0.33)))
-      (540
-       (setf (aref (grib-data target-bundle) target-index)
-             (interpolate-forecast (aref (grib-data target-bundle) target-index) source-fc 0.67)))
+             (interpolate-forecast (aref (grib-data target-bundle) target-index) source-fc 0.5)))
       (otherwise
        (setf (aref (grib-data target-bundle) target-index) source-fc)))))
 
