@@ -1,11 +1,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2018-11-07 17:58:20>
+;;; Last Modified <michael 2018-11-27 00:40:52>
 
 (in-package :cl-weather)
 
-;;; (declaim (optimize (speed 0) (debug 3) (space 0) (safety 0)))
+(declaim (optimize speed (debug 1) (space 0) (safety 1)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Retrieving NOAA wind forecasts
@@ -118,6 +118,7 @@
   ;; - Round position to Second / 10Seconds ?
   ;; - Perform bilinear interpolation of the required supporting points (cached) to the fc time
   ;; - Perform bilinear interpolation to the required latlng.
+  (declare (inline angle bilinear enorm))
   (let* ((lat (latlng-lat latlng))
          (lng% (latlng-lng latlng))
          (lng   (if (< lng% 0d0)
@@ -214,8 +215,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; SHIFT-FORECAST-BUNDLE
 ;;;
-;;;   Move bundle base time forward 6hrs, adjust forecast offsets
-;;:   and discard expired forecasts. Also discard 12h forecasts.
+;;;   Move bundle _Base Time_ forward 6hrs, adjusting forecast offsets.
+;;:   Discard expired forecasts.
+;;;   12h forecasts (f252...f384) are also shifted and their offset adjusted.
+;;;   This is not really correct. 
 
 (defmethod shift-forecast-bundle ((bundle noaa-bundle))
   (adjust-timestamp! (grib-forecast-time (noaa-data bundle)) (offset :minute 360))
@@ -224,7 +227,7 @@
   (let ((new-data (make-array 93 :initial-element nil))
         (old-data (grib-data (noaa-data bundle))))
     (loop
-       :for k :below 81
+       :for k :below 91 ; 93-2
        :do (progn
              ;; Move forecasts 'left', discarding the oldest two forecasts
              (setf (aref new-data k) 
@@ -312,6 +315,7 @@
 
 (defun interpolate-forecast (old new fraction)
   ;; Interpolate two value sets from different cycles
+  (declare (inline enorm))
   (let* ((old-u (grib-values-u-array old))
          (old-v (grib-values-v-array old))
          (new-u (grib-values-u-array new))
@@ -463,10 +467,14 @@
 
 
 (defun time-interpolate (grib offset lat lon)
+  (declare (inline enorm))
   (let ((index
          (position offset (grib-data grib)
                    :test #'<=
-                   :key #'grib-values-offset))
+                   ;; Some grib-values may be NULL
+                   :key #'(lambda (values)
+                            (or (and values (grib-values-offset values))
+                                -1))))
         (array-offset
          (array-offset grib lat lon)))
     (when (null index)
@@ -515,7 +523,7 @@
        (lat-offset (* lat-index lonpoints))
        (array-offset (+ lat-offset lon-index)))
     array-offset))
-    
+
 (defun linear (fraction a b)
   (+ a (* fraction (- b a))))
 
@@ -527,3 +535,4 @@
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
