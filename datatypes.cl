@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2018-10-17 21:30:35>
+;;; Last Modified <michael 2018-11-14 22:35:30>
 
 (in-package :cl-weather)
 
@@ -53,14 +53,16 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Euclidian Norm
-
+(declaim (inline enorm))
 (defun enorm (x y)
   (declare (double-float x y))
   (sqrt (+ (* x x) (* y y))))
+(declaim (notinline enorm))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Interpolation
 
+(declaim (inline bilinear))
 (defun bilinear (w a w0 w1 a0 a1 v00 v01 v10 v11)
   ;; Bilinear interpolation at P=(w a) given values f(w0, a0) = v00 etc.
   ;; If a0=a1 (w0=w1) interpolate at the resp. midpoints of v00, v01, v10, v11
@@ -79,6 +81,7 @@
           (+ v0 (* da (- v1 v0)))))
     (declare (double-float dw v0 v1 da v))
     v))
+(declaim (notinline bilinear))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
