@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2018-11-27 00:40:52>
+;;; Last Modified <michael 2018-12-04 00:23:41>
 
 (in-package :cl-weather)
 
@@ -64,6 +64,7 @@
                                        :cycle cycle
                                        :data grib)))
       (setf *noaa-forecast-bundle* noaa-bundle)
+      (log2:info "Done.")
       (when (cycle-updating-p)
         (update-forecast-bundle bundle)))))
 
@@ -151,6 +152,7 @@
               s))))
 
 (defmethod update-forecast-bundle ((bundle (eql 'noaa-bundle)) &key)
+  (log2:info "Updating forecast")
   (let ((noaa-bundle (get-forecast-bundle bundle)))
     (shift-forecast-bundle noaa-bundle)
     (update-noaa-bundle noaa-bundle)))
