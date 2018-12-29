@@ -1,11 +1,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2018-12-04 00:23:41>
+;;; Last Modified <michael 2018-12-29 02:05:08>
 
 (in-package :cl-weather)
 
-(declaim (optimize speed (debug 1) (space 0) (safety 1)))
+(declaim (optimize (speed 0) (debug 3) (space 0) (safety 1)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Retrieving NOAA wind forecasts
@@ -16,8 +16,8 @@
 ;;;
 ;;; Wind data
 ;;;    Wind data is usually stored in two variables
-;;;    - UGRND: Zonal wind (wind from west is positive)
-;;;    - VGRND: Meridonal wind (wind from south is positive)
+;;;    - U10: Zonal wind (wind from west is positive)
+;;;    - V10: Meridonal wind (wind from south is positive)
 ;;;
 ;;; Forecast availability
 ;;;    Cycle nn starts to become available at nn+3:30 UTC.
@@ -94,7 +94,7 @@
 (defmethod print-object ((thing noaa-forecast) stream)
   (let ((cycle (grib-cycle (fc-grib thing))))
     (format stream "{NOAA Forecast @ ~a, Offset ~a, Cycle ~a::~a}"
-            (fc-time thing)
+            (format-datetime nil (fc-time thing))
             (fc-offset thing)
             (format-timestring nil cycle :format '(:year "-" (:month 2) "-" (:day 2)) :timezone +utc-zone+)
             (timestamp-hour cycle :timezone +utc-zone+))))
@@ -133,6 +133,8 @@
          (lng0 (* (ffloor lng i-inc) i-inc))
          (lat1 (+ lat0 j-inc))
          (lng1 (+ lng0 i-inc))
+         (wlat (if (= lat0 lat1) 0.5d0 (/ (- lat lat0) (- lat1 lat0))))
+         (wlng (if (= lng0 lng1) 0.5d0 (/ (- lng lng0) (- lng1 lng0))))
          (w00
           (time-interpolate grib offset lat0 lng0))
          (w01
@@ -140,16 +142,21 @@
          (w10
           (time-interpolate grib offset lat1 lng0))
          (w11
-          (time-interpolate grib offset lat1 lng1)))
-    (let* ((u (bilinear lng lat lng0 lng1 lat0 lat1 (wind-u w00) (wind-u w01) (wind-u w10) (wind-u w11)))
-           (v (bilinear lng lat lng0 lng1 lat0 lat1 (wind-v w00) (wind-v w01) (wind-v w10) (wind-v w11)))
-           (s (bilinear lng lat lng0 lng1 lat0 lat1
-                        (enorm (wind-u w00) (wind-v w00))
-                        (enorm (wind-u w01) (wind-v w01))
-                        (enorm (wind-u w10) (wind-v w10))
-                        (enorm (wind-u w11) (wind-v w11)))))
+          (time-interpolate grib offset lat1 lng1))
+         (s00 (enorm (wind-u w00) (wind-v w00)))
+         (s01 (enorm (wind-u w01) (wind-v w01)))
+         (s10 (enorm (wind-u w10) (wind-v w10)))
+         (s11 (enorm (wind-u w11) (wind-v w11))))
+    (let* ((u (bilinear wlng wlat (wind-u w00) (wind-u w01) (wind-u w10) (wind-u w11)))
+           (v (bilinear wlng wlat (wind-v w00) (wind-v w01) (wind-v w10) (wind-v w11)))
+           (s (bilinear wlng wlat s00 s01 s10 s11)))
       (values (angle u v)
               s))))
+
+(defun speed-coeff (u v)
+  (let*
+      ((speed-uv (enorm u v))
+       (speed-s (/ (+ ))))))
 
 (defmethod update-forecast-bundle ((bundle (eql 'noaa-bundle)) &key)
   (log2:info "Updating forecast")
@@ -296,7 +303,7 @@
     (log2:trace "Source offset: ~a" source-offset)
     (case source-offset
       ((0 180) 
-       ;; Don't replace in the past
+       ;; Don't modify past data
        )
       (360
        (setf (aref (grib-data target-bundle) target-index)
@@ -318,6 +325,7 @@
 (defun interpolate-forecast (old new fraction)
   ;; Interpolate two value sets from different cycles
   (declare (inline enorm))
+  (log2:info "Interpolating old=~a new=~a" old new)
   (let* ((old-u (grib-values-u-array old))
          (old-v (grib-values-v-array old))
          (new-u (grib-values-u-array new))
@@ -341,7 +349,7 @@
        :for s = (+ s0 (* fraction (- s1 s0)))
        :for u = (+ u0 (* fraction (- u1 u0)))
        :for v = (+ v0 (* fraction (- v1 v0)))
-       :for a = (atan u v)
+       :for a = (angle-r u v)
        :do (multiple-value-bind (u v)
                (p2c a s)
              (setf (aref result-u i)
@@ -498,18 +506,21 @@
                 (s (linear fraction s0 s1))
                 (u (linear fraction u0 u1))
                 (v (linear fraction v0 v1))
-                (a (atan u v)))
+                (a (angle-r u v)))
              (multiple-value-bind (u v)
                  (p2c a s)
                (make-wind :u u :v v)))))))))
 
+(declaim (inline grib-get-uv))
 (defun grib-get-uv (grib time-index array-offset)
   (let*
       ((t1 (aref (grib-data grib) time-index))
        (u1 (aref (grib-values-u-array t1) array-offset))
        (v1 (aref (grib-values-v-array t1) array-offset)))
     (values u1 v1 t1)))
+(declaim (notinline grib-get-uv))
 
+(declaim (inline array-offset))
 (defun array-offset (grib lat lon)
   (let*
       ((j-scan-pos-p (eql (grib-j-scan-pos grib) 1))
@@ -525,15 +536,7 @@
        (lat-offset (* lat-index lonpoints))
        (array-offset (+ lat-offset lon-index)))
     array-offset))
-
-(defun linear (fraction a b)
-  (+ a (* fraction (- b a))))
-
-(defun p2c (a r)
-  (let ((c (cis a)))
-    (values 
-     (* r (imagpart c))
-     (* r (realpart c)))))
+(declaim (notinline array-offset))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

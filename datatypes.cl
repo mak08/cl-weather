@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2018-11-14 22:35:30>
+;;; Last Modified <michael 2018-12-28 02:17:50>
 
 (in-package :cl-weather)
 
@@ -29,6 +29,15 @@
           (grib-lon-end thing)
           (grib-forecast-time thing)))
 
+(defun format-datetime (stream timestamp &key (timezone +utc-zone+))
+  (format stream "~4,'0d-~2,'0d-~2,'0dT~2,'0d:~2,'0d:~2,'0dZ"
+          (timestamp-year timestamp :timezone timezone)
+          (timestamp-month timestamp :timezone timezone)
+          (timestamp-day timestamp :timezone timezone)
+          (timestamp-hour timestamp :timezone timezone)
+          (timestamp-minute timestamp :timezone timezone)
+          (timestamp-second timestamp :timezone timezone)))
+
 (defstruct grib-values
   cycle
   offset                 ; 
@@ -38,50 +47,17 @@
   outdated)
 
 (defmethod print-object ((thing grib-values) stream)
-  (format stream "{grib-values ~a ~a}"
-          (grib-values-offset thing)
-          (array-dimensions
-           (grib-values-u-array thing))))
+  (format stream "{grib-values Cycle ~a Offset ~a}"
+          (grib-values-cycle thing)
+          (grib-values-offset thing)))
 
 
-(defstruct wind u v)
-
+(defstruct wind u v a s)
+ 
 (defmethod print-object ((thing wind) stream)
   (format stream "(Speed ~a Dir ~a)"
           (enorm (wind-u thing) (wind-v thing))
           (angle (wind-u thing) (wind-v thing))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Euclidian Norm
-(declaim (inline enorm))
-(defun enorm (x y)
-  (declare (double-float x y))
-  (sqrt (+ (* x x) (* y y))))
-(declaim (notinline enorm))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Interpolation
-
-(declaim (inline bilinear))
-(defun bilinear (w a w0 w1 a0 a1 v00 v01 v10 v11)
-  ;; Bilinear interpolation at P=(w a) given values f(w0, a0) = v00 etc.
-  ;; If a0=a1 (w0=w1) interpolate at the resp. midpoints of v00, v01, v10, v11
-  (declare (double-float w a w0 w1 a0 a1 v00 v10 v01 v11))
-  (assert (<= w0 w w1))
-  (assert (<= a0 a a1))
-  (let* ((dw
-          (if (= w0 w1) 0.5d0 (/ (- w w0) (- w1 w0))))
-         (v0
-          (+ v00 (* dw (- v01 v00))))
-         (v1
-          (+ v10 (* dw (- v11 v10))))
-         (da
-          (if (= a0 a1) 0.5d0 (/ (- a a0) (- a1 a0))))
-         (v
-          (+ v0 (* da (- v1 v0)))))
-    (declare (double-float dw v0 v1 da v))
-    v))
-(declaim (notinline bilinear))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
