@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2018-12-28 11:49:03>
+;;; Last Modified <michael 2018-12-30 14:16:44>
 
 (defsystem "cl-weather"
   :description "Load and prepare weather data"
@@ -14,8 +14,7 @@
                (:file "datatypes")
                (:file "meteodata")
                ;; (:file "meteodata-dwd")
-               (:file "meteodata-noaa")
-               (:file "forecast-access")))
+               (:file "meteodata-noaa")))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

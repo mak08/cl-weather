@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2018-12-28 02:17:50>
+;;; Last Modified <michael 2018-12-30 11:50:47>
 
 (in-package :cl-weather)
 
@@ -42,9 +42,7 @@
   cycle
   offset                 ; 
   u-array
-  v-array
-  vmax-data
-  outdated)
+  v-array)
 
 (defmethod print-object ((thing grib-values) stream)
   (format stream "{grib-values Cycle ~a Offset ~a}"

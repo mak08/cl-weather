@@ -1,11 +1,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2018-12-29 02:05:08>
+;;; Last Modified <michael 2018-12-30 16:14:58>
 
 (in-package :cl-weather)
 
-(declaim (optimize (speed 0) (debug 3) (space 0) (safety 1)))
+(declaim (optimize (speed 3) (debug 0) (space 0) (safety 1)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Retrieving NOAA wind forecasts
@@ -107,19 +107,17 @@
          (fc-offset (truncate
                      (/ (timestamp-difference fc-time (fcb-time bundle))
                         60))))
-    (or (gethash fc-offset (%fc-hash bundle))
-        (setf (gethash fc-offset (%fc-hash bundle))
-              (make-instance 'noaa-forecast
-                             :grib (noaa-data bundle)
-                             :time fc-time
-                             :offset fc-offset)))))
+    (make-instance 'noaa-forecast
+                   :grib (noaa-data bundle)
+                   :time fc-time
+                   :offset fc-offset)))
 
 (defmethod get-wind-forecast ((forecast noaa-forecast) latlng)
   ;; New interpolation procedure:
   ;; - Round position to Second / 10Seconds ?
   ;; - Perform bilinear interpolation of the required supporting points (cached) to the fc time
   ;; - Perform bilinear interpolation to the required latlng.
-  (declare (inline angle bilinear enorm))
+  (declare (inline latlng-lat latlng-lng time-interpolate angle bilinear enorm))
   (let* ((lat (latlng-lat latlng))
          (lng% (latlng-lng latlng))
          (lng   (if (< lng% 0d0)
@@ -143,10 +141,10 @@
           (time-interpolate grib offset lat1 lng0))
          (w11
           (time-interpolate grib offset lat1 lng1))
-         (s00 (enorm (wind-u w00) (wind-v w00)))
-         (s01 (enorm (wind-u w01) (wind-v w01)))
-         (s10 (enorm (wind-u w10) (wind-v w10)))
-         (s11 (enorm (wind-u w11) (wind-v w11))))
+         (s00 (or (wind-s w00) (enorm (wind-u w00) (wind-v w00))))
+         (s01 (or (wind-s w01) (enorm (wind-u w01) (wind-v w01))))
+         (s10 (or (wind-s w10) (enorm (wind-u w10) (wind-v w10))))
+         (s11 (or (wind-s w11) (enorm (wind-u w11) (wind-v w11)))))
     (let* ((u (bilinear wlng wlat (wind-u w00) (wind-u w01) (wind-u w10) (wind-u w11)))
            (v (bilinear wlng wlat (wind-v w00) (wind-v w01) (wind-v w10) (wind-v w11)))
            (s (bilinear wlng wlat s00 s01 s10 s11)))
@@ -245,7 +243,6 @@
              ;; Rightmost positions remain NULL. Don't attempt to adjust them
              ;; (if we shift again before the positions are re-filled).
              (when (aref new-data k)
-               (setf (grib-values-outdated (aref new-data k)) t)
                (decf (grib-values-offset (aref new-data k))
                      360))))
     (setf (grib-data (noaa-data bundle))
@@ -324,7 +321,7 @@
 
 (defun interpolate-forecast (old new fraction)
   ;; Interpolate two value sets from different cycles
-  (declare (inline enorm))
+  (declare (inline enorm p2c angle-r))
   (log2:info "Interpolating old=~a new=~a" old new)
   (let* ((old-u (grib-values-u-array old))
          (old-v (grib-values-v-array old))
@@ -477,7 +474,7 @@
 
 
 (defun time-interpolate (grib offset lat lon)
-  (declare (inline enorm))
+  (declare (inline enorm p2c linear angle-r))
   (let ((index
          (position offset (grib-data grib)
                    :test #'<=
@@ -509,7 +506,7 @@
                 (a (angle-r u v)))
              (multiple-value-bind (u v)
                  (p2c a s)
-               (make-wind :u u :v v)))))))))
+               (make-wind :u u :v v :a a :s s)))))))))
 
 (declaim (inline grib-get-uv))
 (defun grib-get-uv (grib time-index array-offset)
