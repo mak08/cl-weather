@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Meteorological Data
 ;;; Author         Michael Kappert 2017
-;;; Last Modified <michael 2018-09-19 12:17:22>
+;;; Last Modified <michael 2019-01-02 00:16:15>
 
 (in-package :cl-weather)
 
@@ -85,7 +85,7 @@
 ;;; ==============
 ;;; A forecast represents forecast data for a specific point in time.
 ;;; Wind speed and direction for any point in the covered area can be obtained
-;;; from a forecast, but the actual values are nit computed beforehand.
+;;; from a forecast, but the actual values are not computed beforehand.
 
 (defclass forecast ()
   ())

@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2017
-;;; Last Modified <michael 2018-08-05 23:11:19>
+;;; Last Modified <michael 2019-01-02 15:16:29>
 
 (in-package :cl-weather)
 
@@ -12,7 +12,8 @@
           (codes-index-get-string index "shortName"))
          (forecasts
           (make-array (length steps)))
-         (result (make-grib)))
+         (grib-info nil)
+         (result (make-dataset)))
     
     (log2:trace "Index steps (~a): ~a" (length steps) steps)
     (loop
@@ -20,66 +21,63 @@
        :for step :across steps
        :do (progn
              (codes-index-select-long index "step" step)
-             (let ((u-array
-                    (progn 
-                      (codes-index-select-string index "shortName" "10u")
-                      (with-handle-from-index (handle index)
-                        (when (= i 0)
-                          (get-grid-info result handle)
-                          (log2:info "Processing ~a messages [~ax~a]"
-                                     (length steps)
-                                     (grib-lat-points result)
-                                     (grib-lon-points result)))
-                        (codes-get-double-array handle "values"))))
-                   (v-array
-                    (progn 
-                      (codes-index-select-string index "shortName" "10v")
-                      (with-handle-from-index (handle index)
-                        (codes-get-double-array handle "values")))))
-               (setf (aref forecasts i)
-                     (make-grib-values :cycle (grib-cycle result)
-                                       :offset (* step 60)
-                                       :u-array u-array
-                                       :v-array v-array)))))
+             (multiple-value-bind (u-data-time u-offset u-grib-info u-values)
+                 (select-and-read-message index "u10")
+               (multiple-value-bind (v-data-time u-offset v-grib-info v-values)
+                   (select-and-read-message index "v10")
+                 (setf (aref forecasts i)
+                       (make-uv :cycle u-data-time
+                                :basetime (adjust-timestamp u-data-time (offset :hour u-offset))
+                                :offset (* step 60)
+                                :u-array u-values
+                                :v-array v-values))))))
     (codes-index-delete index)
     (setf (grib-data result) forecasts)
     (values
      result)))
 
-(defun get-grid-info (grib message)
-  (let* ((date (format nil "~a" (codes-get-long message "dataDate")))
-         (time (codes-get-long message "dataTime"))
-         (dummy (log2:info "Reading grib with date=~a time=~a" date time))
-         (timestamp (parse-timestring
-                     (format () "~a-~a-~aT~2,'0d:~2,'0d:00+00:00"
-                             (subseq date 0 4)
-                             (subseq date 4 6)
-                             (subseq date 6 8)
-                             (/ time 100)
-                             (rem time 100))))
-         (forecast-time (codes-get-long message "forecastTime")))
-    (setf (grib-forecast-time grib) (adjust-timestamp timestamp (offset :hour forecast-time))
-          (grib-cycle grib) (encode-cycle-timestamp date time)
-          (grib-grid-size grib) (codes-get-size message "values")
-          (grib-step-units grib) (codes-get-long message "stepUnits")
-          (grib-lat-points grib) (codes-get-long message "numberOfPointsAlongAMeridian")
-          (grib-lon-points grib) (codes-get-long message "numberOfPointsAlongAParallel")
-          (grib-lat-start grib) (coerce (codes-get-long message "latitudeOfFirstGridPointInDegrees") 'double-float)
-          (grib-lat-end grib) (coerce (codes-get-long message "latitudeOfLastGridPointInDegrees") 'double-float)
-          (grib-lon-start grib) (coerce (codes-get-long message "longitudeOfFirstGridPointInDegrees") 'double-float)
-          (grib-lon-end grib) (coerce (codes-get-long message "longitudeOfLastGridPointInDegrees") 'double-float)
-          (grib-j-inc grib) (codes-get-double message "jDirectionIncrementInDegrees") ; "south to north"
-          (grib-i-inc grib) (codes-get-double message "iDirectionIncrementInDegrees") ; "west to east"
-          (grib-j-scan-pos grib) (codes-get-long message "jScansPositively")
-          (grib-i-scan-neg  grib) (codes-get-long message "iScansNegatively"))))
+(defun select-and-read-message (index varname)
+  (codes-index-select-string index "shortName" varname)
+  (with-handle-from-index (handle index)
+    (let ((data-time
+           (read-data-datetime handle))
+          (forecast-time (codes-get-long handle "forecastTime"))
+          (grib-info
+           (get-grib-info handle))
+          (values
+           (codes-get-double-array handle "values")))
+      (values data-time
+              forecast-time
+              grib-info
+              values))))
 
-(defun encode-cycle-timestamp (date time)
-  (encode-timestamp 0 0 0
-                    (/ time 100)
-                    (parse-integer (subseq date 6 8))
-                    (parse-integer (subseq date 4 6))
-                    (parse-integer (subseq date 0 4))
-                    :timezone +utc-zone+))
+(defun read-data-datetime (message)
+  (let ((date
+         (format nil "~a" (codes-get-long message "dataDate")))
+        (time
+         (codes-get-long message "dataTime")))
+    (parse-timestring (format () "~a-~a-~aT~2,'0d:~2,'0d:00+00:00"
+                              (subseq date 0 4)
+                              (subseq date 4 6)
+                              (subseq date 6 8)
+                              (/ time 100)
+                              (rem time 100)))))
+
+
+(defun get-gribinfo (message)
+  (make-gribinfo
+   :grid-size (codes-get-size message "values")
+   :step-units (codes-get-long message "stepUnits")
+   :lat-points (codes-get-long message "numberOfPointsAlongAMeridian")
+   :lon-points (codes-get-long message "numberOfPointsAlongAParallel")
+   :lat-start (coerce (codes-get-long message "latitudeOfFirstGridPointInDegrees") 'double-float)
+   :lat-end (coerce (codes-get-long message "latitudeOfLastGridPointInDegrees") 'double-float)
+   :lon-start (coerce (codes-get-long message "longitudeOfFirstGridPointInDegrees") 'double-float)
+   :lon-end (coerce (codes-get-long message "longitudeOfLastGridPointInDegrees") 'double-float)
+   :j-inc (codes-get-double message "jDirectionIncrementInDegrees") ; "south to north"
+   :i-inc (codes-get-double message "iDirectionIncrementInDegrees") ; "west to east"
+   :j-scan-pos (codes-get-long message "jScansPositively")
+   :i-scan-neg  (codes-get-long message "iScansNegatively")))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
