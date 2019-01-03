@@ -1,10 +1,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Meteorological Data
 ;;; Author         Michael Kappert 2017
-;;; Last Modified <michael 2019-01-02 00:16:15>
+;;; Last Modified <michael 2019-01-03 00:13:38>
 
 (in-package :cl-weather)
-
+(declaim (optimize (speed 3) (debug 0) (space 0) (safety 1)))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Notes
 ;;; * Pro:
@@ -46,38 +46,30 @@
 
 ;;; Load current forecast bundle from the datasource (initial load).
 ;;; Overwrite previously loaded data.
-(defgeneric load-forecast-bundle (datasource)
+(defgeneric load-dataset (datasource)
   )
 
 ;;; Returns the currently loaded forecast bundle from the datasource.
 ;;; Implicitely load bundle if necessary.
-;;; Methods should use EQL-specializers on the forecast-bundle class name.
-(defgeneric get-forecast-bundle (datasource)
+;;; Methods should use EQL-specializers on the dataset class name.
+(defgeneric get-dataset (datasource)
   )
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; =====================
-;;; Class forecast-bundle
-;;; =====================
-;;; A forecast-bundle provides forecast data (u+v values) over a period of time
-;;; for a "rectangular" area (usually the whole world). 
-
-(defclass forecast-bundle ()
-  ((stepwidth :accessor fcb-stepwidth :initarg :stepwidth :initform 1)))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Get the time of the first forecast in the bundle
-(defgeneric fcb-time (forecast-bundle)
+(defgeneric dataset-time (dataset)
   )
+(defmethod dataset-time ((dataset dataset))
+  (dataset-basetime dataset))
 
-(defgeneric fcb-max-offset (forecast-bundle)
+(defgeneric dataset-max-offset (dataset)
   )
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Get the forecast for a specified time 
-(defgeneric get-forecast (forecast-bundle utc-time)
-  )
+(defmethod dataset-max-offset ((dataset dataset))
+  (let
+      ((last-values (find-if-not #'null (dataset-forecasts dataset) :from-end t)))
+    (/
+     (uv-offset last-values)
+     60)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; ==============
@@ -85,16 +77,39 @@
 ;;; ==============
 ;;; A forecast represents forecast data for a specific point in time.
 ;;; Wind speed and direction for any point in the covered area can be obtained
-;;; from a forecast, but the actual values are not computed beforehand.
+;;; from a forecast, but the actual values are computed only on demand.
 
 (defclass forecast ()
-  ())
+  ((fc-dataset :reader fc-dataset :initarg :dataset)
+   (fc-time :reader fc-time :initarg :time)
+   (fc-offset :reader fc-offset :initarg :offset :documentation "Offset from dataset basetime in minutes")
+   (fc-hash :accessor fc-hash% :initform (make-hash-table))))
+
+(defmethod print-object ((thing forecast) stream)
+  (let ((cycle (dataset-cycle (fc-dataset thing))))
+    (format stream "{Forecast @ ~a, Offset ~a, Cycle ~a::~a}"
+            (format-datetime nil (fc-time thing))
+            (fc-offset thing)
+            (format-timestring nil cycle :format '(:year "-" (:month 2) "-" (:day 2)) :timezone +utc-zone+)
+            (timestamp-hour cycle :timezone +utc-zone+))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Get the forecast time
-(defgeneric fc-time (forecast)
+;;; Get the forecast for a specified time 
+(defgeneric get-forecast (dataset utc-time)
   )
 
+(defmethod get-forecast ((dataset dataset) (utc-time local-time:timestamp))
+  ;; New procedure:
+  ;; - Round time to minute
+  ;; - Check if forecast exists at dataset and is still valid
+  (let* ((fc-time (timestamp-minimize-part utc-time :sec))
+         (fc-offset (truncate
+                     (/ (timestamp-difference fc-time (dataset-basetime dataset))
+                        60))))
+    (make-instance 'forecast
+                   :dataset dataset
+                   :time fc-time
+                   :offset fc-offset)))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Obtain wind forecast data (direction, speed)
 ;;;
@@ -104,37 +119,58 @@
 ;;; TBD: Should this method allow only latlng on grid points or interpolate?
 (defgeneric get-wind-forecast (forecast latlng))
 
+(defmethod get-wind-forecast ((forecast forecast) latlng)
+  ;; New interpolation procedure:
+  ;; - Round position to Second / 10Seconds ?
+  ;; - Perform bilinear interpolation of the required supporting points (cached) to the fc time
+  ;; - Perform bilinear interpolation to the required latlng.
+  (declare (inline latlng-lat latlng-lng time-interpolate angle bilinear enorm))
+  (let* ((lat (latlng-lat latlng))
+         (lng% (latlng-lng latlng))
+         (lng   (if (< lng% 0d0)
+                    (+ lng% 360d0)
+                    lng%))
+         (dataset (fc-dataset forecast))
+         (offset (fc-offset forecast))
+         (info (dataset-grib-info dataset))
+         (i-inc (gribinfo-i-inc info))
+         (j-inc (gribinfo-j-inc info))
+         (lat0 (* (ffloor lat j-inc) j-inc))
+         (lng0 (* (ffloor lng i-inc) i-inc))
+         (lat1 (+ lat0 j-inc))
+         (lng1 (+ lng0 i-inc))
+         (wlat (if (= lat0 lat1) 0.5d0 (/ (- lat lat0) (- lat1 lat0))))
+         (wlng (if (= lng0 lng1) 0.5d0 (/ (- lng lng0) (- lng1 lng0))))
+         (w00
+          (time-interpolate dataset offset lat0 lng0))
+         (w01
+          (time-interpolate dataset offset lat0 lng1))
+         (w10
+          (time-interpolate dataset offset lat1 lng0))
+         (w11
+          (time-interpolate dataset offset lat1 lng1))
+         (s00 (or (wind-s w00) (enorm (wind-u w00) (wind-v w00))))
+         (s01 (or (wind-s w01) (enorm (wind-u w01) (wind-v w01))))
+         (s10 (or (wind-s w10) (enorm (wind-u w10) (wind-v w10))))
+         (s11 (or (wind-s w11) (enorm (wind-u w11) (wind-v w11)))))
+    (let* ((u (bilinear wlng wlat (wind-u w00) (wind-u w01) (wind-u w10) (wind-u w11)))
+           (v (bilinear wlng wlat (wind-v w00) (wind-v w01) (wind-v w10) (wind-v w11)))
+           (s (bilinear wlng wlat s00 s01 s10 s11)))
+      (values (angle u v)
+              s))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; ================
 ;;; Periodic updates
 ;;; ================
 
-(defgeneric update-forecast-bundle (bundle &key &allow-other-keys))
+(defgeneric update-dataset (dataset &key &allow-other-keys))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; ====================
 ;;; Dummy implementation
 ;;; ====================
 
-(defclass constant-wind-bundle (forecast-bundle)
-  ((fcb-time :reader fcb-time :initarg :time)))
-
-(defmethod get-forecast-bundle ((datasource (eql 'constant-wind-bundle)))
-  (make-instance 'constant-wind-bundle :time (now)))
-
-(defclass constant-wind-forecast (forecast)
-  ())
-
-
-(defmethod fcb-max-offset ((bundle constant-wind-bundle))
-  192)
-
-(defmethod get-forecast ((bundle constant-wind-bundle) (utc-time local-time:timestamp))
-  (make-instance 'constant-wind-forecast))
-
-(defmethod get-wind-forecast ((forecast constant-wind-forecast) latlng)
-  (values (latlng-lng latlng)
-          (/ (+ (latlng-lat latlng) 90) 10)))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

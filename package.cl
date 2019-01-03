@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2018-12-28 11:59:19>
+;;; Last Modified <michael 2019-01-02 21:41:22>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
@@ -13,16 +13,18 @@
         "CL-MAP")
   (:export "*GRIB-FOLDER*"
 
-           "CONSTANT-WIND-BUNDLE"
-           "NOAA-BUNDLE"
-           "DWD-ICON-BUNDLE"
+           "NOAA-DATASET"
+           "DWD-DATASET"
+           "CONSTANT-DATASET"
+           
+           "GET-DATASET"
+           "LOAD-DATASET"
+           "UPDATE-DATASET"
 
-           "GET-FORECAST-BUNDLE"
-           "LOAD-FORECAST-BUNDLE"
-           "UPDATE-FORECAST-BUNDLE"
-
-           "FCB-TIME"
-           "FCB-MAX-OFFSET"
+           "DATASET-TIME"
+           "DATASET-CYCLE"
+           "DATASET-MAX-OFFSET"
+           
            "GET-FORECAST"
            "GET-WIND-FORECAST"
            "FC-TIME"))

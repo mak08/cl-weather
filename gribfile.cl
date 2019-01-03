@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2017
-;;; Last Modified <michael 2019-01-02 15:16:29>
+;;; Last Modified <michael 2019-01-02 23:40:47>
 
 (in-package :cl-weather)
 
@@ -13,7 +13,8 @@
          (forecasts
           (make-array (length steps)))
          (grib-info nil)
-         (result (make-dataset)))
+         (result
+          (make-dataset)))
     
     (log2:trace "Index steps (~a): ~a" (length steps) steps)
     (loop
@@ -22,17 +23,21 @@
        :do (progn
              (codes-index-select-long index "step" step)
              (multiple-value-bind (u-data-time u-offset u-grib-info u-values)
-                 (select-and-read-message index "u10")
+                 (select-and-read-message index "10u")
                (multiple-value-bind (v-data-time u-offset v-grib-info v-values)
-                   (select-and-read-message index "v10")
+                   (select-and-read-message index "10v")
+                 (when (= i 0)
+                   (setf (dataset-basetime result) u-data-time)
+                   (setf (dataset-grib-info result) u-grib-info))
                  (setf (aref forecasts i)
-                       (make-uv :cycle u-data-time
-                                :basetime (adjust-timestamp u-data-time (offset :hour u-offset))
-                                :offset (* step 60)
+                       (make-uv :dataset result
+                                :cycle u-data-time
+                                :offset (* u-offset 60)
+                                :step step
                                 :u-array u-values
                                 :v-array v-values))))))
     (codes-index-delete index)
-    (setf (grib-data result) forecasts)
+    (setf (dataset-forecasts result) forecasts)
     (values
      result)))
 
@@ -41,13 +46,13 @@
   (with-handle-from-index (handle index)
     (let ((data-time
            (read-data-datetime handle))
-          (forecast-time (codes-get-long handle "forecastTime"))
+          (offset (codes-get-long handle "forecastTime"))
           (grib-info
-           (get-grib-info handle))
+           (get-gribinfo handle))
           (values
            (codes-get-double-array handle "values")))
       (values data-time
-              forecast-time
+              offset
               grib-info
               values))))
 
