@@ -1,10 +1,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Meteorological Data
 ;;; Author         Michael Kappert 2017
-;;; Last Modified <michael 2019-01-03 00:13:38>
+;;; Last Modified <michael 2019-01-12 21:58:47>
+
+(declaim (optimize (speed 3) (debug 0) (space 1) (safety 1)))
 
 (in-package :cl-weather)
-(declaim (optimize (speed 3) (debug 0) (space 0) (safety 1)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Notes
 ;;; * Pro:
@@ -87,7 +89,7 @@
 
 (defmethod print-object ((thing forecast) stream)
   (let ((cycle (dataset-cycle (fc-dataset thing))))
-    (format stream "{Forecast @ ~a, Offset ~a, Cycle ~a::~a}"
+    (format stream "{Forecast @ ~a, Offset ~a, Cycle ~a|~a}"
             (format-datetime nil (fc-time thing))
             (fc-offset thing)
             (format-timestring nil cycle :format '(:year "-" (:month 2) "-" (:day 2)) :timezone +utc-zone+)

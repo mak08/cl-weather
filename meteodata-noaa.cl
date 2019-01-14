@@ -1,12 +1,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2019-01-03 19:36:03>
+;;; Last Modified <michael 2019-01-13 17:18:05>
+
+(declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
 (in-package :cl-weather)
 
-(declaim (optimize (speed 3) (debug 0) (space 0) (safety 1)))
-;; (declaim (optimize (speed 1) (debug 3) (space 0) (safety 1)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Retrieving NOAA wind forecasts
@@ -396,7 +396,7 @@
 (declaim (notinline array-offset))
 
 (defun time-interpolate (dataset offset lat lon)
-  (declare (inline enorm p2c linear angle-r grib-get-uv array-index))
+  (declare (inline enorm p2c linear angle-r grib-get-uv))
   (let ((index
          (position offset (dataset-forecasts dataset)
                    :test #'<=
@@ -417,9 +417,10 @@
          (multiple-value-bind (u0 v0 t0)
              (grib-get-uv dataset (1- index) array-offset)
            (let*
-               ((fraction (/
-                           (-  offset (uv-offset t0))
-                           (- (uv-offset t1) (uv-offset t0))))
+               ((fraction (+ 0d0
+                             (/
+                              (-  offset (uv-offset t0))
+                              (- (uv-offset t1) (uv-offset t0)))))
                 (s0 (enorm u0 v0))
                 (s1 (enorm u1 v1))
                 (s (linear fraction s0 s1))
