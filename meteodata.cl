@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Meteorological Data
 ;;; Author         Michael Kappert 2017
-;;; Last Modified <michael 2019-01-12 21:58:47>
+;;; Last Modified <michael 2019-03-04 00:35:16>
 
 (declaim (optimize (speed 3) (debug 0) (space 1) (safety 1)))
 
@@ -121,7 +121,15 @@
 ;;; TBD: Should this method allow only latlng on grid points or interpolate?
 (defgeneric get-wind-forecast (forecast latlng))
 
-(defmethod get-wind-forecast ((forecast forecast) latlng)
+(declaim (inline avg4))
+(defun avg4 (x1 x2 x3 x4)
+  (/ (+ x1 x2 x3 x4) 4))
+
+(declaim (inline scoeff))
+(defun scoeff (a0 a1)
+  (abs (sin (- a0 a1))))
+
+(defmethod get-wind-forecast ((forecast forecast) (latlng vector))
   ;; New interpolation procedure:
   ;; - Round position to Second / 10Seconds ?
   ;; - Perform bilinear interpolation of the required supporting points (cached) to the fc time
@@ -134,32 +142,71 @@
                     lng%))
          (dataset (fc-dataset forecast))
          (offset (fc-offset forecast))
-         (info (dataset-grib-info dataset))
-         (i-inc (gribinfo-i-inc info))
-         (j-inc (gribinfo-j-inc info))
-         (lat0 (* (ffloor lat j-inc) j-inc))
-         (lng0 (* (ffloor lng i-inc) i-inc))
-         (lat1 (+ lat0 j-inc))
-         (lng1 (+ lng0 i-inc))
-         (wlat (if (= lat0 lat1) 0.5d0 (/ (- lat lat0) (- lat1 lat0))))
-         (wlng (if (= lng0 lng1) 0.5d0 (/ (- lng lng0) (- lng1 lng0))))
-         (w00
-          (time-interpolate dataset offset lat0 lng0))
-         (w01
-          (time-interpolate dataset offset lat0 lng1))
-         (w10
-          (time-interpolate dataset offset lat1 lng0))
-         (w11
-          (time-interpolate dataset offset lat1 lng1))
-         (s00 (or (wind-s w00) (enorm (wind-u w00) (wind-v w00))))
-         (s01 (or (wind-s w01) (enorm (wind-u w01) (wind-v w01))))
-         (s10 (or (wind-s w10) (enorm (wind-u w10) (wind-v w10))))
-         (s11 (or (wind-s w11) (enorm (wind-u w11) (wind-v w11)))))
-    (let* ((u (bilinear wlng wlat (wind-u w00) (wind-u w01) (wind-u w10) (wind-u w11)))
-           (v (bilinear wlng wlat (wind-v w00) (wind-v w01) (wind-v w10) (wind-v w11)))
-           (s (bilinear wlng wlat s00 s01 s10 s11)))
-      (values (angle u v)
-              s))))
+         (index (position offset (dataset-forecasts dataset)
+                          :test #'<=
+                          ;; Some grib-values may be NULL
+                          :key #'(lambda (fc)
+                                   (etypecase fc
+                                     (null -1)
+                                     (blended-forecast
+                                      (uv-offset (blended-forecast-new fc)))
+                                     (uv
+                                      (uv-offset fc)))))))
+    (cond
+      ((null index)
+       (values nil nil))
+      (t
+       (let*
+           ((info (dataset-grib-info dataset))
+            (i-inc (gribinfo-i-inc info))
+            (j-inc (gribinfo-j-inc info))
+            (lat0 (* (ffloor lat j-inc) j-inc))
+            (lng0 (* (ffloor lng i-inc) i-inc))
+            (lat1 (+ lat0 j-inc))
+            (lng1 (+ lng0 i-inc))
+            (wlat (/ (- lat lat0) (- lat1 lat0)))
+            (wlng (/ (- lng lng0) (- lng1 lng0)))
+            (w00  (time-interpolate dataset offset index lat0 lng0))
+            (w01  (time-interpolate dataset offset index lat0 lng1))
+            (w10  (time-interpolate dataset offset index lat1 lng0))
+            (w11  (time-interpolate dataset offset index lat1 lng1)))
+         (with-accessors ((s00 wind-s) (a00 wind-a) (u00 wind-u) (v00 wind-v))
+             w00
+           (with-accessors ((s01 wind-s) (a01 wind-a) (u01 wind-u) (v01 wind-v))
+               w01
+             (with-accessors ((s10 wind-s) (a10 wind-a) (u10 wind-u) (v10 wind-v))
+                 w10
+               (with-accessors ((s11 wind-s) (a11 wind-a) (u11 wind-u) (v11 wind-v))
+                   w11
+                 (let* ((wind-u (bilinear wlat wlng u00 u01 u10 u11))
+                        (wind-v (bilinear wlat wlng v00 v01 v10 v11))
+                        (speed-bilinear (bilinear wlat wlng s00 s01 s10 s11))
+                        (speed-enorm (enorm wind-u wind-v))
+                        (avg-enorm (enorm (avg4 u00 u10 u01 u11) (avg4 v00 v10 v01 v11)))
+                        (speed-avg (avg4 s00 s10 s01 s11))
+                        (speed-ratio (if (> speed-avg 0) (/ avg-enorm speed-avg) 1d0)))
+                   (multiple-value-bind (c10 c11 c00 c01)
+                       (cond ((< wlng 0.5d0)
+                              (cond ((< wlat 0.5d0)
+                                     (values (scoeff a10 a00) speed-ratio 1d0 (scoeff a00 a01)))
+                                    (t
+                                     (decf wlat 0.5d0)
+                                     (values 1d0 (scoeff a10 a11) (scoeff a10 a00) speed-ratio))))
+                             (t
+                              (decf wlng 0.5d0)
+                              (cond ((< wlat 0.5d0)
+                                     (values speed-ratio (scoeff a11 a01) (scoeff a00 a01) 1d0))
+                                    (t
+                                     (decf wlat 0.5d0)
+                                     (values (scoeff a10 a11) 1d0 speed-ratio (scoeff a11 a01))))))
+                     (let* ((factor (if (> speed-bilinear 0)
+                                        (expt (/ speed-enorm speed-bilinear)
+                                              (- 1d0 (expt (bilinear (* wlat 2d0) (* wlng 2d0) c00 c01 c10 c11)
+                                                           0.7d0)))
+                                        1))
+                            (speed (* speed-bilinear factor)))
+                       (values (angle wind-u wind-v)
+                               speed)))))))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; ================

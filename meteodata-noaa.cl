@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2019-01-13 17:18:05>
+;;; Last Modified <michael 2019-03-04 00:21:42>
 
 (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -183,6 +183,7 @@
                                 (read-noaa-wind-data (list destpath)))))))
   (log2:info "Done."))
 
+(defstruct blended-forecast new old)
 
 (defun merge-forecasts (target-dataset target-index source-dataset)
   ;; Expect same timestamp
@@ -196,12 +197,12 @@
          (source-offset (uv-offset source-fc)))
     (log2:trace "Source offset: ~a" source-offset)
     (case source-offset
-      ((0 180) 
+      ((0) 
        ;; Don't modify past data
        )
-      (360
+      (180
        (setf (aref (dataset-forecasts target-dataset) target-index)
-             (interpolate-forecast target-dataset (aref (dataset-forecasts target-dataset) target-index) source-fc 0.5)))
+             (make-blended-forecast :new (aref (dataset-forecasts target-dataset) target-index) :old source-fc)))
       (otherwise
        (setf (aref (dataset-forecasts target-dataset) target-index) source-fc)))))
 
@@ -346,8 +347,8 @@
                        "&var_VGRD=on"
                        "&leftlon=0"
                        "&rightlon=360"
-                       "&toplat=90"
-                       "&bottomlat=-90"))
+                       "&toplat=80"
+                       "&bottomlat=-80"))
          (ftp-command
           (format () "curl -n \"~a\" -o ~a/~a" url dest-folder destfile)))
     (log2:trace "~a" ftp-command)
@@ -367,14 +368,48 @@
       (codes-index-add-file index filename))
     (get-values-from-index index)))
 
+(declaim (inline interpolate-uv))
+(defun interpolate-uv (u0 v0 u1 v1 fraction)
+  (declare (inline enorm p2c linear angle-r))
+  (let*
+      ((s0 (enorm u0 v0))
+       (s1 (enorm u1 v1))
+       (s (linear fraction s0 s1))
+       (u (linear fraction u0 u1))
+       (v (linear fraction v0 v1))
+       (a (angle-r u v)))
+    (multiple-value-bind (u v)
+        (p2c a s)
+      (make-wind :u u :v v :a a :s s))))
+(declaim (notinline interpolate-uv))
+
+(defparameter *blending* 60d0)
 
 (declaim (inline grib-get-uv))
-(defun grib-get-uv (dataset time-index array-offset)
-  (let*
-      ((t1 (aref (dataset-forecasts dataset) time-index))
-       (u1 (aref (uv-u-array t1) array-offset))
-       (v1 (aref (uv-v-array t1) array-offset)))
-    (values u1 v1 t1)))
+(defun grib-get-uv (dataset time-index time-offset array-offset)
+  (declare (inline linear))
+  (let ((fc (aref (dataset-forecasts dataset) time-index)))
+    (etypecase fc
+      (blended-forecast
+       (let*
+           ((fc0 (blended-forecast-old fc))
+            (u0 (aref (uv-u-array fc0) array-offset))
+            (v0 (aref (uv-v-array fc0) array-offset))
+            (fc1 (blended-forecast-new fc))
+            (u1 (aref (uv-u-array fc1) array-offset))
+            (v1 (aref (uv-v-array fc1) array-offset))
+            (fraction (/ (max 0
+                              (min (- time-offset 210) *blending*))
+                         *blending*)))
+         (assert (eql (uv-offset fc0) (uv-offset fc1)))
+         (values (linear fraction u0 u1)
+                 (linear fraction v0 v1)
+                 fc1)))
+      (uv
+       (let*
+           ((u (aref (uv-u-array fc) array-offset))
+            (v (aref (uv-v-array fc) array-offset)))
+         (values u v fc))))))
 (declaim (notinline grib-get-uv))
 
 (declaim (inline array-offset))
@@ -395,41 +430,25 @@
     array-offset))
 (declaim (notinline array-offset))
 
-(defun time-interpolate (dataset offset lat lon)
-  (declare (inline enorm p2c linear angle-r grib-get-uv))
-  (let ((index
-         (position offset (dataset-forecasts dataset)
-                   :test #'<=
-                   ;; Some grib-values may be NULL
-                   :key #'(lambda (values)
-                            (or (and values (uv-offset values))
-                                -1))))
-        (array-offset
+(declaim (inline time-interpolate))
+(defun time-interpolate (dataset offset index lat lon)
+  (declare (inline interpolate-uv))
+  (let ((array-offset
          (array-offset (dataset-grib-info dataset) lat lon)))
-    (when (null index)
-      (error "No data for offset ~a" offset))
     (multiple-value-bind (u1 v1 t1)
-        (grib-get-uv dataset index array-offset)
+        (grib-get-uv dataset index offset array-offset)
       (cond
         ((eql index 0)
-         (make-wind :u u1 :v v1))
+         (make-wind :u u1 :v v1 :s (enorm u1 v1) :a (angle u1 v1)))
         (t
          (multiple-value-bind (u0 v0 t0)
-             (grib-get-uv dataset (1- index) array-offset)
-           (let*
-               ((fraction (+ 0d0
-                             (/
-                              (-  offset (uv-offset t0))
-                              (- (uv-offset t1) (uv-offset t0)))))
-                (s0 (enorm u0 v0))
-                (s1 (enorm u1 v1))
-                (s (linear fraction s0 s1))
-                (u (linear fraction u0 u1))
-                (v (linear fraction v0 v1))
-                (a (angle-r u v)))
-             (multiple-value-bind (u v)
-                 (p2c a s)
-               (make-wind :u u :v v :a a :s s)))))))))
+             (grib-get-uv dataset (1- index) offset array-offset)
+           (let ((fraction (+ 0d0
+                              (/
+                               (- offset (uv-offset t0))
+                               (- (uv-offset t1) (uv-offset t0))))))
+             (interpolate-uv u0 v0 u1 v1 fraction))))))))
+
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
