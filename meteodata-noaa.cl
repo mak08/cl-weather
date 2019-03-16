@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2019-03-04 00:21:42>
+;;; Last Modified <michael 2019-03-16 23:12:28>
 
 (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -197,10 +197,12 @@
          (source-offset (uv-offset source-fc)))
     (log2:trace "Source offset: ~a" source-offset)
     (case source-offset
-      ((0) 
+      (0
        ;; Don't modify past data
        )
       (180
+       )
+      (360
        (setf (aref (dataset-forecasts target-dataset) target-index)
              (make-blended-forecast :new (aref (dataset-forecasts target-dataset) target-index) :old source-fc)))
       (otherwise
@@ -399,7 +401,7 @@
             (u1 (aref (uv-u-array fc1) array-offset))
             (v1 (aref (uv-v-array fc1) array-offset))
             (fraction (/ (max 0
-                              (min (- time-offset 210) *blending*))
+                              (min (- time-offset 240) *blending*))
                          *blending*)))
          (assert (eql (uv-offset fc0) (uv-offset fc1)))
          (values (linear fraction u0 u1)
