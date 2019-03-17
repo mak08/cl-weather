@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2019-03-16 23:12:28>
+;;; Last Modified <michael 2019-03-18 00:10:05>
 
 (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -204,7 +204,7 @@
        )
       (360
        (setf (aref (dataset-forecasts target-dataset) target-index)
-             (make-blended-forecast :new (aref (dataset-forecasts target-dataset) target-index) :old source-fc)))
+             (make-blended-forecast :old (aref (dataset-forecasts target-dataset) target-index) :new source-fc)))
       (otherwise
        (setf (aref (dataset-forecasts target-dataset) target-index) source-fc)))))
 
