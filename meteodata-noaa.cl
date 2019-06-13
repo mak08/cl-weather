@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2019-03-18 00:10:05>
+;;; Last Modified <michael 2019-06-13 00:39:18>
 
 (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -276,6 +276,10 @@
     234 237 240 252 264 276 288 300 312 324
     336 348 360 372 384))
 
+
+(defun cycle-files (date cycle)
+  )
+
 (defun download-noaa-dataset (date cycle)
   ;; Date: yyyymmdd 
   ;; Cycle: 00|06|12|18
@@ -292,7 +296,7 @@
 
 (defun noaa-spec-and-destfile (date &key (cycle "0") (offset 6) (basename "pgrb2") (resolution "1p00"))
   (let* ((directory
-          (format () "~a~2,,,'0@a" date cycle))
+          (format () "~a%2F~2,,,'0@a" date cycle))
          (spec
           (format () "gfs.t~2,,,'0@az.~a.~a.f~3,,,'0@a" cycle basename resolution offset))
          (destfile
@@ -326,7 +330,7 @@
 (defun noaa-file-exists-p (date cycle spec)
   "Retrieve the GRIB file valid at timestamp according to VR rules"
   (let* ((url
-          (format nil "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/gfs.~a~2,,,'0@a/~a" date cycle spec))
+          (format nil "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a/~a" date cycle spec))
          (command
           (format () "curl -sfI ~a" url)))
     (log2:info "~a" command)
