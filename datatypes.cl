@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2019-01-02 23:44:29>
+;;; Last Modified <michael 2019-06-26 22:43:32>
 
 (in-package :cl-weather)
 
@@ -39,6 +39,28 @@
   i-inc j-inc                   ; Grid increment in degrees 
   i-scan-neg j-scan-pos         ; Value order
   )
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; ==============
+;;; Class forecast
+;;; ==============
+;;; A forecast represents forecast data for a specific point in time.
+;;; Wind speed and direction for any point in the covered area can be obtained
+;;; from a forecast, but the actual values are computed only on demand.
+
+(defclass forecast ()
+  ((fc-dataset :reader fc-dataset :initarg :dataset)
+   (fc-time :reader fc-time :initarg :time)
+   (fc-offset :reader fc-offset :initarg :offset :documentation "Offset from dataset basetime in minutes")
+   (fc-hash :accessor fc-hash% :initform (make-hash-table))))
+
+(defmethod print-object ((thing forecast) stream)
+  (let ((cycle (dataset-cycle (fc-dataset thing))))
+    (format stream "{Forecast @ ~a, Offset ~a, Cycle ~a|~a}"
+            (format-datetime nil (fc-time thing))
+            (fc-offset thing)
+            (format-timestring nil cycle :format '(:year "-" (:month 2) "-" (:day 2)) :timezone +utc-zone+)
+            (timestamp-hour cycle :timezone +utc-zone+))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Forecast data

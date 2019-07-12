@@ -1,11 +1,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2017
-;;; Last Modified <michael 2019-01-02 23:40:47>
+;;; Last Modified <michael 2019-06-30 23:08:50>
 
 (in-package :cl-weather)
 
-(defun get-values-from-index (index)
+(defun get-uv-steps-from-index (index)
   (let* ((steps 
           (codes-index-get-long index "step"))
          (shortNames

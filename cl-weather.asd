@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2018-12-30 14:16:44>
+;;; Last Modified <michael 2019-06-26 22:49:27>
 
 (defsystem "cl-weather"
   :description "Load and prepare weather data"
@@ -9,12 +9,15 @@
   :default-component-class cl-source-file.cl
   :serial t
   :components ((:file "package")
+               (:file "common")
                (:file "macros")
                (:file "gribfile")
                (:file "datatypes")
-               (:file "meteodata")
-               ;; (:file "meteodata-dwd")
-               (:file "meteodata-noaa")))
+               (:file "noaa-cycles")
+               (:file "noaa-download")
+               (:file "noaa-update")
+               (:file "noaa-forecast")
+               (:file "noaa-prediction")))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
