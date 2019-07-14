@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2019-07-12 23:22:43>
+;;; Last Modified <michael 2019-07-14 00:26:10>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -66,9 +66,14 @@
 (defstruct params info fc0 fc1 fraction)
 
 (defun prediction-parameters (timestamp &key (date nil) (cycle nil))
-  (when (null date)
-    (assert (null cycle))
-    (multiple-value-setq (date cycle) (current-cycle)))
+  ;; If $data is provided, $cycle must also be provided, and the specified forecast will be used.
+  ;; Otherwise, the latest available forecast will be used.
+  ;; ### ToDo ### The $next-fc may not be available yet!
+  (cond
+    (date
+     (assert cycle))
+    (t
+     (multiple-value-setq (date cycle) (available-cycle timestamp))))
   (log2:trace "TS: ~a, date:~a cycle:~a" timestamp date cycle)
   (let* ((forecast (cycle-forecast date cycle timestamp))
          (next-fc (next-forecast forecast))

@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2019-07-04 23:05:23>
+;;; Last Modified <michael 2019-07-14 00:20:33>
 
 (in-package "CL-WEATHER")
 
@@ -11,6 +11,23 @@
          (date (format-timestring nil avail-time :format '((:year 4) (:month 2) (:day 2))))
          (cycle (* 6 (truncate (timestamp-hour avail-time :timezone +utc-zone+) 6))))
     (values date cycle)))
+
+(defun available-cycle (timestamp)
+  ;; The next cycle becomes available about 3:30h after the forecast computation starts.
+  (let* ((avail-time (adjust-timestamp (now) (offset :minute (- 210))))
+         (date (format-timestring nil avail-time :format '((:year 4) (:month 2) (:day 2))))
+         (cycle (* 6 (truncate (timestamp-hour avail-time :timezone +utc-zone+) 6)))
+         (forecast (cycle-forecast date cycle timestamp))
+         (elapsed (truncate (timestamp-difference (now)
+                                                  (timespec-to-timestamp date cycle)) 60))
+         (available (> elapsed (+ 210 (truncate forecast 3)))))
+    (if available
+        (values date cycle)
+        (previous-cycle date cycle))))
+
+(defun previous-cycle (date cycle)
+  (let ((timestamp (timespec-to-timestamp  date cycle)))
+    (timestamp-to-timespec (adjust-timestamp timestamp (offset :hour -6)))))
 
 (defun latest-complete-cycle (&optional (time (now)))
   ;; Determine the latest cycle that should'be complete (theoretically) at the given time

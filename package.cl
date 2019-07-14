@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2019-07-05 23:17:11>
+;;; Last Modified <michael 2019-07-14 00:23:14>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
@@ -14,6 +14,7 @@
   (:export "*GRIB-DIRECTORY*"
            "NOAA-START-UPDATES"
            "LATEST-COMPLETE-CYCLE"
+           "AVAILABLE-CYCLE"
            "CURRENT-CYCLE"
            "CYCLE-UPDATING-P"
            "DOWNLOAD-CYCLE-BACKTRACK"
