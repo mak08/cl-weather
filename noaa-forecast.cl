@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Access to NOAA forecasts (non-interpolated)
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2019-07-12 21:29:18>
+;;; Last Modified <michael 2019-07-15 23:31:16>
 
 (in-package "CL-WEATHER")
 
@@ -23,14 +23,17 @@
     (log2:trace "Add file ~a~%" filename)
     (when load-missing
       (download-noaa-file date cycle offset))
-    (ecase (codes-index-add-file index filename)
-      (0)
-      (-1
-       (log2:warning "codes-index-add-file: -1"))
-      (-11
-       (log2:warning "codes-index-add-file: -11")
-       (error "File ~a not found" filename)))
-    (get-uv-steps-from-index index)))
+    (let ((retcode (codes-index-add-file index filename)))
+      (case retcode
+        (0)
+        (-11
+         (log2:warning "codes-index-add-file: -11")
+         (error "File ~a not found" filename))
+        (t
+         (let ((message (codes-get-error-message retcode)))
+           (log2:warning "codes-index-add-file: ~a: ~a" filename retcode)
+           (error "eccodes: ~a: ~a" filename message))))
+      (get-uv-steps-from-index index))))
   
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
