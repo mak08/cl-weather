@@ -1,9 +1,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2019-07-12 23:22:53>
+;;; Last Modified <michael 2019-07-15 22:02:54>
 
-(declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
+;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
 (in-package "CL-WEATHER")
 

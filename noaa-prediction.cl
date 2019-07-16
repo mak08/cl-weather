@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2019-07-14 00:26:10>
+;;; Last Modified <michael 2019-07-16 22:52:14>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -63,7 +63,7 @@
   (let* ((params (prediction-parameters timestamp :date date :cycle cycle)))
     (noaa-prediction% lat lng params)))
 
-(defstruct params info fc0 fc1 fraction)
+(defstruct params timestamp info fc0 fc1 fraction)
 
 (defun prediction-parameters (timestamp &key (date nil) (cycle nil))
   ;; If $data is provided, $cycle must also be provided, and the specified forecast will be used.
@@ -84,6 +84,7 @@
          (fraction (forecast-fraction fc0 fc1 timestamp))
          (info (dataset-grib-info ds0)))
     (make-params :info info
+                 :timestamp (timespec-to-timestamp date cycle)
                  :fc0 fc0
                  :fc1 fc1
                  :fraction fraction)))

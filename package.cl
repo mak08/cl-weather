@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2019-07-14 00:23:14>
+;;; Last Modified <michael 2019-07-16 22:54:26>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
@@ -24,7 +24,11 @@
            "DATASET-CYCLE"
            "DATASET-TIME"
            "NOAA-FORECAST"
+
+           ;; This is a hack - Need to cleanup handling of prediction base time
            "PREDICTION-PARAMETERS"
+           "PARAMS-TIMESTAMP"
+
            "NOAA-PREDICTION%"
            "NOAA-PREDICTION"))
 
