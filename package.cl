@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2019-07-16 22:54:26>
+;;; Last Modified <michael 2019-07-18 21:52:09>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
@@ -17,6 +17,7 @@
            "AVAILABLE-CYCLE"
            "CURRENT-CYCLE"
            "CYCLE-UPDATING-P"
+           "PREVIOUS-CYCLE"
            "DOWNLOAD-CYCLE-BACKTRACK"
            "DOWNLOAD-LATEST-CYCLE"
            "DOWNLOAD-CYCLE"
@@ -29,6 +30,8 @@
            "PREDICTION-PARAMETERS"
            "PARAMS-TIMESTAMP"
 
+           "TIMESPEC-TO-TIMESTAMP"
+           
            "NOAA-PREDICTION%"
            "NOAA-PREDICTION"))
 
