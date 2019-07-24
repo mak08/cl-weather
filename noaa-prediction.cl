@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2019-07-16 22:52:14>
+;;; Last Modified <michael 2019-07-25 00:10:56>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -63,9 +63,53 @@
   (let* ((params (prediction-parameters timestamp :date date :cycle cycle)))
     (noaa-prediction% lat lng params)))
 
-(defstruct params timestamp info fc0 fc1 fraction)
 
-(defun prediction-parameters (timestamp &key (date nil) (cycle nil))
+(defun simple-estimator (wlat wlng s00 s01 s10 s11 a00 a01 a10 a11 u00 u01 u10 u11 v00 v01 v10 v11)
+  (let* ((wind-u (bilinear wlat wlng u00 u01 u10 u11))
+         (wind-v (bilinear wlat wlng v00 v01 v10 v11))
+         (speed (bilinear wlat wlng s00 s01 s10 s11))
+         (angle (angle wind-u wind-v)))
+    (values angle
+            speed)))
+
+(defun vr-estimator (wlat wlng s00 s01 s10 s11 a00 a01 a10 a11 u00 u01 u10 u11 v00 v01 v10 v11)
+  (flet ((avg4 (x1 x2 x3 x4)
+           (/ (+ x1 x2 x3 x4) 4))
+         (scoeff (a0 a1)
+           (abs (sin (- a0 a1)))))
+    (let* ((wind-u (bilinear wlat wlng u00 u01 u10 u11))
+           (wind-v (bilinear wlat wlng v00 v01 v10 v11))
+           (speed-bilinear (bilinear wlat wlng s00 s01 s10 s11))
+           (speed-enorm (enorm wind-u wind-v))
+           (avg-enorm (enorm (avg4 u00 u10 u01 u11) (avg4 v00 v10 v01 v11)))
+           (speed-avg (avg4 s00 s10 s01 s11))
+           (speed-ratio (if (> speed-avg 0) (/ avg-enorm speed-avg) 1d0)))
+      (multiple-value-bind (c10 c11 c00 c01)
+          (cond ((< wlng 0.5d0)
+                 (cond ((< wlat 0.5d0)
+                        (values (scoeff a10 a00) speed-ratio 1d0 (scoeff a00 a01)))
+                       (t
+                        (decf wlat 0.5d0)
+                        (values 1d0 (scoeff a10 a11) (scoeff a10 a00) speed-ratio))))
+                (t
+                 (decf wlng 0.5d0)
+                 (cond ((< wlat 0.5d0)
+                        (values speed-ratio (scoeff a11 a01) (scoeff a00 a01) 1d0))
+                       (t
+                        (decf wlat 0.5d0)
+                        (values (scoeff a10 a11) 1d0 speed-ratio (scoeff a11 a01))))))
+        (let* ((factor (if (> speed-bilinear 0)
+                           (expt (/ speed-enorm speed-bilinear)
+                                 (- 1d0 (expt (bilinear (* wlat 2d0) (* wlng 2d0) c00 c01 c10 c11)
+                                              0.7d0)))
+                           1))
+               (speed (* speed-bilinear factor)))
+          (values (angle wind-u wind-v)
+                  speed))))))
+
+(defstruct params timestamp base-time info fc0 fc1 fraction (estimator #'simple-estimator))
+
+(defun prediction-parameters (timestamp &key (date nil) (cycle nil) (estimator #'simple-estimator))
   ;; If $data is provided, $cycle must also be provided, and the specified forecast will be used.
   ;; Otherwise, the latest available forecast will be used.
   ;; ### ToDo ### The $next-fc may not be available yet!
@@ -84,10 +128,48 @@
          (fraction (forecast-fraction fc0 fc1 timestamp))
          (info (dataset-grib-info ds0)))
     (make-params :info info
-                 :timestamp (timespec-to-timestamp date cycle)
+                 :timestamp timestamp
+                 :base-time (timespec-to-timestamp date cycle)
                  :fc0 fc0
                  :fc1 fc1
-                 :fraction fraction)))
+                 :fraction fraction
+                 :estimator estimator)))
+
+(defstruct iparams current old)
+
+(defun interpolation-parameters (timestamp)
+  (multiple-value-bind  (date1 cycle1)
+      (available-cycle timestamp)
+    (multiple-value-bind (date0 cycle0)
+        (previous-cycle date1 cycle1)
+      (make-iparams :current (prediction-parameters forecast-time :date date1 :cycle cycle1 :estimator #'vr-estimator)
+                    :old (prediction-parameters forecast-time :date date0 :cycle cycle0 :estimator #'vr-estimator)))))
+
+(defun interpolated-prediction (lat lng iparams)
+  (let ((params-new (iparams-current iparams))
+        (params-old (iparams-old iparams)))
+    (multiple-value-bind (a1 s1)
+        (noaa-prediction% lat lng params-new)
+      (let ((delta (/ (timestamp-difference (params-timestamp params-new) (params-base-time params-new)) 3600.0)))
+        (cond
+          ((< 3.5 delta 8.0)
+           (let ((fraction (/ (- delta 3.5d0) 4.5d0))) 
+             (multiple-value-bind (a0 s0)
+                 (noaa-prediction% lat lng params-old)
+               (multiple-value-bind (u0 v0) (p2c (rad a0) s0)
+                 (multiple-value-bind (u1 v1) (p2c (rad a1) s1)
+                   (let* ((w (interpolate-uv u0 v0 u1 v1 fraction))
+                          (a (deg (wind-a w)))
+                          (s (wind-s w)))
+                     (log2:info "Fraction: ~a, old: ~a ~a new: ~a ~a int: ~a ~a" fraction a0 (m/s-to-knots s0) a1 (m/s-to-knots s1) a (m/s-to-knots s))
+                     (values a s)))))))
+          (t
+           (log2:info "Returning New: ~a ~a" a1 s1)
+           (values a1 s1)))))))
+           
+(defun test-prediction (lat lng &key (timestamp (now)))
+  (let ((iparams (interpolation-parameters timestamp)))
+    (interpolated-prediction lat lng iparams)))
 
 (defun noaa-prediction% (lat lng params)
   (declare (inline normalized-lat normalized-lng uv-index time-interpolate angle bilinear enorm))
@@ -116,12 +198,7 @@
             w10
           (with-accessors ((s11 wind-s) (a11 wind-a) (u11 wind-u) (v11 wind-v))
               w11
-            (let* ((wind-u (bilinear wlat wlng u00 u01 u10 u11))
-                   (wind-v (bilinear wlat wlng v00 v01 v10 v11))
-                   (speed (enorm wind-u wind-v))
-                   (angle (angle wind-u wind-v)))
-              (values angle
-                      speed))))))))
+            (funcall (params-estimator params) wlat wlng s00 s01 s10 s11 a00 a01 a10 a11 u00 u01 u10 u11 v00 v01 v10 v11)))))))
 
 (defun format-datetime (stream timestamp &key (timezone +utc-zone+))
   (format stream "~4,'0d-~2,'0d-~2,'0dT~2,'0d:~2,'0d:~2,'0dZ"

@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2019-07-18 21:52:09>
+;;; Last Modified <michael 2019-07-25 00:13:58>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
@@ -28,12 +28,18 @@
 
            ;; This is a hack - Need to cleanup handling of prediction base time
            "PREDICTION-PARAMETERS"
+           "PARAMS-BASE-TIME"
            "PARAMS-TIMESTAMP"
+           "VR-PARAMETERS"
+           "VR-ESTIMATOR"
+           "MAKE-IPARAMS"
 
            "TIMESPEC-TO-TIMESTAMP"
            
            "NOAA-PREDICTION%"
-           "NOAA-PREDICTION"))
+           "NOAA-PREDICTION"
+           "INTERPOLATION-PARAMETERS"
+           "INTERPOLATED-PREDICTION"))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
