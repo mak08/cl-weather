@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2019-07-25 00:10:56>
+;;; Last Modified <michael 2019-07-25 00:42:14>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -142,8 +142,11 @@
       (available-cycle timestamp)
     (multiple-value-bind (date0 cycle0)
         (previous-cycle date1 cycle1)
-      (make-iparams :current (prediction-parameters forecast-time :date date1 :cycle cycle1 :estimator #'vr-estimator)
-                    :old (prediction-parameters forecast-time :date date0 :cycle cycle0 :estimator #'vr-estimator)))))
+      (make-iparams :current (prediction-parameters timestamp :date date1 :cycle cycle1 :estimator #'vr-estimator)
+                    :old (prediction-parameters timestamp :date date0 :cycle cycle0 :estimator #'vr-estimator)))))
+
+(defun base-time (iparams)
+  (params-base-time (iparams-current iparams)))
 
 (defun interpolated-prediction (lat lng iparams)
   (let ((params-new (iparams-current iparams))
@@ -161,10 +164,8 @@
                    (let* ((w (interpolate-uv u0 v0 u1 v1 fraction))
                           (a (deg (wind-a w)))
                           (s (wind-s w)))
-                     (log2:info "Fraction: ~a, old: ~a ~a new: ~a ~a int: ~a ~a" fraction a0 (m/s-to-knots s0) a1 (m/s-to-knots s1) a (m/s-to-knots s))
                      (values a s)))))))
           (t
-           (log2:info "Returning New: ~a ~a" a1 s1)
            (values a1 s1)))))))
            
 (defun test-prediction (lat lng &key (timestamp (now)))

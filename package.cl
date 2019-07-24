@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2019-07-25 00:13:58>
+;;; Last Modified <michael 2019-07-25 00:40:36>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
@@ -33,6 +33,7 @@
            "VR-PARAMETERS"
            "VR-ESTIMATOR"
            "MAKE-IPARAMS"
+           "BASE-TIME"
 
            "TIMESPEC-TO-TIMESTAMP"
            
