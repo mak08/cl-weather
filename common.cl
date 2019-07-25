@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2019-07-21 21:53:00>
+;;; Last Modified <michael 2019-07-25 22:36:32>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -23,10 +23,10 @@
 (declaim (inline normalized-lat))
 (defun normalized-lat (lat)
   (declare (double-float lat))
-  (cond ((minusp lat)
-         (+ lat 180d0))
-        ((>= lat 180d0)
+  (cond ((> lat 90)
          (- lat 180d0))
+        ((< lat -90)
+         (+ lat 180d0))
         (t
          lat)))
 
