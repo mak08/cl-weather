@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2019-07-25 00:40:36>
+;;; Last Modified <michael 2019-07-28 18:10:52>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
@@ -39,6 +39,8 @@
            
            "NOAA-PREDICTION%"
            "NOAA-PREDICTION"
+           "VR-PREDICTION%"
+           "VR-PREDICTION"
            "INTERPOLATION-PARAMETERS"
            "INTERPOLATED-PREDICTION"))
 
