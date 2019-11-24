@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2019-08-10 01:05:09>
+;;; Last Modified <michael 2019-11-25 00:35:39>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -25,14 +25,15 @@
 
 (defun interpolated-prediction (lat lng iparams)
   (let ((params-new (iparams-current iparams))
+        (offset-new (iparams-offset iparams))
         (params-old (iparams-previous iparams)))
-    (vr-prediction% lat lng params-new params-old)))
+    (vr-prediction% lat lng params-new params-old offset-new)))
 
 (defun vr-prediction (lat lng  &key (timestamp (now)) (date) (cycle))
   (let* ((params (prediction-parameters timestamp :date date :cycle cycle)))
     (vr-prediction% lat lng params)))
 
-(defun vr-prediction% (lat lng current &optional (previous))
+(defun vr-prediction% (lat lng current &optional previous offset-new)
   (declare (inline normalized-lat normalized-lng uv-index time-interpolate angle bilinear enorm))
   (let* (
          (info (params-info current))
@@ -43,10 +44,10 @@
          (wlat (/ (- (normalized-lat lat) lat0) j-inc))
          (wlng (/ (- (normalized-lng lng) lng0) i-inc)))
     (multiple-value-bind (u00 u01 u10 u11 v00 v01 v10 v11 a00 a01 a10 a11 s00 s01 s10 s11)
-        (time-interpolate lat lng info current previous)
+        (time-interpolate lat lng info current previous offset-new)
       (position-interpolate wlat wlng s00 s01 s10 s11 a00 a01 a10 a11 u00 u01 u10 u11 v00 v01 v10 v11))))
 
-(defun time-interpolate (lat lng info current previous)
+(defun time-interpolate (lat lng info current previous offset-new)
   (declare (inline grib-get-uv))
   (let* ((i-inc (gribinfo-i-inc info))
          (j-inc (gribinfo-j-inc info))
@@ -58,39 +59,50 @@
          (i01 (uv-index info lat0 lng1))
          (i10 (uv-index info lat1 lng0))
          (i11 (uv-index info lat1 lng1)))
-    (with-bindings (((u00 v00) (time-interpolate-index i00 current previous))
-                    ((u01 v01) (time-interpolate-index i01 current previous))
-                    ((u10 v10) (time-interpolate-index i10 current previous))
-                    ((u11 v11) (time-interpolate-index i11 current previous)))
+    (with-bindings (((u00 v00) (time-interpolate-index i00 current previous offset-new))
+                    ((u01 v01) (time-interpolate-index i01 current previous offset-new))
+                    ((u10 v10) (time-interpolate-index i10 current previous offset-new))
+                    ((u11 v11) (time-interpolate-index i11 current previous offset-new)))
       (values u00 u01 u10 u11
               v00 v01 v10 v11
               (angle u00 v00) (angle u01 v01) (angle u10 v10) (angle u11 v11)
               (enorm u00 v00) (enorm u01 v01) (enorm u10 v10) (enorm u11 v11)))))
 
-(defun time-interpolate-index (index current previous)
-  (let ((fraction (params-fraction current))
-        (f0c1 (params-fc0 current))
-        (f1c1 (params-fc1 current))
-        (merge (and previous
-                    (eql (params-forecast current) 3)))
-        (f0c0 (when previous (params-fc0 previous)))
-        (f1c0 (when previous (params-fc1 previous))))
-    (log2:trace "Merging: ~a fraction ~a current fc ~a " merge fraction (params-forecast current))
-    (with-bindings (((u0 v0) (grib-get-uv f0c1 index))
-                    ((u1 v1) (grib-get-uv f1c1 index)))
-      (cond
-        ((not merge)
+(defun time-interpolate-index (index current previous offset-new)
+  (let* ((fraction (params-fraction current))
+         (f0c1 (params-fc0 current))
+         (f1c1 (params-fc1 current))
+         (merge-start 4.5)
+         (merge-window 2.0)
+         (merge
+          ;; Merge new and old if we are between 4.5 and 6h into the new forecast
+          ;; (by this time, most of the new forecast should be available)
+          (and previous
+               (<= merge-start offset-new (+ merge-start merge-window)))))
+    (cond
+      ((not merge)
+       (log2:trace "Not merging, Fraction ~,2,,'0,f, Current FC ~a " fraction (params-forecast current))
+       (with-bindings (((u0 v0) (grib-get-uv f0c1 index))
+                       ((u1 v1) (grib-get-uv f1c1 index)))
          (let ((u (linear fraction u0 u1))
                (v (linear fraction v0 v1)))
-           (values u v)))
-        (t
-         (multiple-value-bind (u2 v2)
-             (grib-get-uv f1c0 index)
-           (let* ((uz (+ (* (- 1 fraction) u1) (* fraction u2) (- u0)))
-                  (vz (+ (* (- 1 fraction) v1) (* fraction v2) (- v0)))
-                  (u (+ u0 (* uz fraction)))
-                  (v (+ v0 (* vz fraction))))
-             (values u v))))))))
+           (values u v))))
+      (t
+       (let ((f0c0 (params-fc0 previous))
+             (f1c0 (params-fc1 previous)))
+         (with-bindings (((u00 v00) (grib-get-uv f0c0 index))
+                         ((u10 v10) (grib-get-uv f1c0 index))
+                         ((u01 v01) (grib-get-uv f0c1 index))
+                         ((u11 v11) (grib-get-uv f1c1 index)))
+           (let ((u0 (linear fraction u00 u10))
+                 (v0 (linear fraction v00 v10))
+                 (u1 (linear fraction u01 u11))
+                 (v1 (linear fraction v01 v11))
+                 (d (/ (- offset-new merge-start) merge-window)))
+             (log2:trace "Merging: ~,2,,'0,f, Fraction ~,2,,'0,f Current FC ~a " d fraction (params-forecast current))
+             (let* ((uz (+ (* (- 1.0 d) u1) (* d u0)))
+                    (vz (+ (* (- 1.0 d) v1) (* d v0))))
+               (values uz vz)))))))))
 
 (defun position-interpolate (wlat wlng s00 s01 s10 s11 a00 a01 a10 a11 u00 u01 u10 u11 v00 v01 v10 v11)
   (flet ((avg4 (x1 x2 x3 x4)

@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2019-08-07 23:11:15>
+;;; Last Modified <michael 2019-11-25 00:36:27>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -74,7 +74,7 @@
 (defun grib-get-uv (uv index)
   (let ((u (aref (uv-u-array uv) index))
         (v (aref (uv-v-array uv) index)))
-    (log2:trace "~a => ~a,~a" index (angle u v) (enorm u v))
+    (log2:trace "~a => ~,2,,'0,f,~,2,,'0,f" index (angle u v) (enorm u v))
     (values u v)))
 (declaim (notinline grib-get-uv))
 
@@ -114,7 +114,7 @@
 (defstruct params timestamp base-time forecast next-fc info fc0 fc1 fraction)
 
 (defun prediction-parameters (timestamp &key (date nil) (cycle nil))
-  ;; If $data is provided, $cycle must also be provided, and the specified forecast will be used.
+  ;; If $date is provided, $cycle must also be provided, and the specified forecast will be used.
   ;; Otherwise, the latest available forecast will be used.
   ;; ### ToDo ### The $next-fc may not be available yet!
   (cond
@@ -149,13 +149,17 @@
         (previous-cycle date1 cycle1)
       (let* ((current (prediction-parameters timestamp :date date1 :cycle cycle1))
              (previous (prediction-parameters timestamp :date date0 :cycle cycle0))
-             (offset (/ (timestamp-difference (params-timestamp current)
-                                              (params-base-time current))
-                        3600.0)))
-        (log2:trace "Delta: ~a" offset)
+             (c-offset (/ (timestamp-difference (params-timestamp current)
+                                                (params-base-time current))
+                         3600.0))
+             (p-offset (/ (timestamp-difference (params-timestamp previous)
+                                                (params-base-time previous))
+                          3600.0)))
+        (log2:trace "Offset in current cycle:  ~a" c-offset)
+        (log2:trace "Offset in previous cycle: ~a" p-offset)
         (make-iparams :current current
                       :previous previous
-                      :offset offset)))))
+                      :offset c-offset)))))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

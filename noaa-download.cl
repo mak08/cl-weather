@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2019-11-22 01:19:11>
+;;; Last Modified <michael 2019-11-24 20:57:06>
 
 (in-package "CL-WEATHER")
 
@@ -11,6 +11,28 @@
 ;;;
 ;;; Example URL:
 ;;;    http://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_1p00.pl?file=gfs.t12z.pgrb2.1p00.f000&lev_10_m_above_ground=on&var_UGRD=on&var_VGRD=on&leftlon=0&rightlon=360&toplat=90&bottomlat=-90&dir=%2Fgfs.2017091712
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Retrieving NOAA wind forecasts
+;;;    Model: NOAA GFS
+;;;    Resolution: 1 degree
+;;;    GRIB2 times are UTC
+;;;    NOAA GFS forecasts are produced every 6hrs (four cycles per day)
+;;;
+;;; Wind data
+;;;    Wind data is usually stored in two variables
+;;;    - U10: Zonal wind (wind from west is positive)
+;;;    - V10: Meridonal wind (wind from south is positive)
+;;;
+;;; Forecast availability
+;;;    Cycle nn starts to become available at nn+3:30 UTC.
+;;;    The full cycle data is available after 1.5hrs:
+;;;
+;;;    Cycle  First FC avail    Full FC avail
+;;;    00     03:30Z            05:00Z
+;;;    06     09:30Z            11:00Z
+;;;    12     15:30Z            17:00Z
+;;;    18     21:30Z            23:00Z
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; DOWNLOAD-CYCLE
