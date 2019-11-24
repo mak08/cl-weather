@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2019-07-07 17:25:45>
+;;; Last Modified <michael 2019-11-22 01:19:11>
 
 (in-package "CL-WEATHER")
 
@@ -121,25 +121,41 @@
 (defun download-noaa-file (date cycle offset)
   (let* ((spec (noaa-spec date :cycle cycle :offset offset))
          (destpath (noaa-destpath date :cycle cycle :offset offset)))
-    (if (probe-file destpath)
-        (log2:trace "File exists: ~a(~a:~a))" destpath date cycle)
-        (progn
-          (log2:trace "~a(~a:~a)" destpath date cycle)
-          (multiple-value-bind
-                (out error-out status)
-              (download-noaa-file% date cycle spec destpath)
-            (case status
-              (0
-               (let ((download-size
-                      (with-open-file (f destpath)
-                        (file-length f))))
-                 (when (< download-size 50000)
-                   (log2:warning  "Deleting ~a (short file). Forecast not available yet?" destpath)
-                   (uiop:delete-file-if-exists destpath)
-                   (error "Forecast ~a:~a short file, not available yet?" date spec))))
-              (otherwise
-               (error "cURL error ~a" status))))))
+    (cond
+      ((and (probe-file destpath)
+            (noaa-file-complete-p destpath))
+       (log2:trace "File exists: ~a(~a:~a))" destpath date cycle))
+      (t
+       (when (probe-file destpath)
+         (log2:info "File truncated: ~a" destpath))
+       (log2:trace "~a(~a:~a)" destpath date cycle)
+       (multiple-value-bind
+             (out error-out status)
+           (download-noaa-file% date cycle spec destpath)
+         (case status
+           (0
+            (let ((download-size
+                   (with-open-file (f destpath)
+                     (file-length f))))
+              (when (< download-size 50000)
+                (log2:warning  "Deleting ~a (short file). Forecast not available yet?" destpath)
+                (uiop:delete-file-if-exists destpath)
+                (error "Forecast ~a:~a short file, not available yet?" date spec))))
+           (otherwise
+            (error "cURL error ~a" status))))))
     destpath))
+
+(defun noaa-file-complete-p (destpath)
+  (with-open-file (f destpath)
+    (let* ((length
+            (file-length f))
+           (closing-bytes
+            (make-array 4)))
+      (file-position f (- length 4))
+      (read-sequence closing-bytes f)
+      (every
+       (lambda (c) (eql c #\7))
+       closing-bytes))))
 
 (defun download-noaa-file% (date cycle spec destpath &key (resolution "1p00"))
   "Retrieve the GRIB file valid at timestamp according to VR rules"
