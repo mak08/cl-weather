@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2019-11-25 00:35:39>
+;;; Last Modified <michael 2019-11-25 01:28:23>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -72,7 +72,7 @@
   (let* ((fraction (params-fraction current))
          (f0c1 (params-fc0 current))
          (f1c1 (params-fc1 current))
-         (merge-start 4.5)
+         (merge-start 4.0)
          (merge-window 2.0)
          (merge
           ;; Merge new and old if we are between 4.5 and 6h into the new forecast
