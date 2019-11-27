@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2019-11-27 20:25:12>
+;;; Last Modified <michael 2019-11-27 23:38:07>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -68,26 +68,27 @@
               (angle u00 v00) (angle u01 v01) (angle u10 v10) (angle u11 v11)
               (enorm u00 v00) (enorm u01 v01) (enorm u10 v10) (enorm u11 v11)))))
 
-(defun time-interpolate-index (index current previous offset-new)
+(defun time-interpolate-index (index current previous offset)
   (let* ((fraction (params-fraction current))
          (f0c1 (params-fc0 current))
          (f1c1 (params-fc1 current))
+         ;; Merge new and old if we are between 4-6h into the new forecast
+         ;; (by this time, most of the new forecast should be available)
          (merge-start 4.0)
-         (merge-window 2.0)
-         (merge
-          ;; Merge new and old if we are between 4.5 and 6h into the new forecast
-          ;; (by this time, most of the new forecast should be available)
-          (and previous
-               (<= merge-start offset-new (+ merge-start merge-window)))))
+         (merge-window 2.0))
     (cond
-      ((not merge)
-       (log2:trace "Not merging, Fraction ~,2,,'0,f, Current FC ~a " fraction (params-forecast current))
-       (with-bindings (((u0 v0) (grib-get-uv f0c1 index))
-                       ((u1 v1) (grib-get-uv f1c1 index)))
-         (let ((u (linear fraction u0 u1))
-               (v (linear fraction v0 v1)))
-           (values u v))))
-      (t
+      ((and previous
+            (< offset merge-start))
+       (log2:trace "Using old, Offset ~,2,,'0,f, Fraction ~,2,,'0,f, Step ~a " offset fraction (params-forecast current))
+       (let ((f0c0 (params-fc0 previous))
+             (f1c0 (params-fc1 previous)))
+         (with-bindings (((u0 v0) (grib-get-uv f0c0 index))
+                         ((u1 v1) (grib-get-uv f1c0 index)))
+           (let ((u (linear fraction u0 u1))
+                 (v (linear fraction v0 v1)))
+             (values u v)))))
+      ((and previous
+            (<= merge-start offset (+ merge-start merge-window)))
        (let ((f0c0 (params-fc0 previous))
              (f1c0 (params-fc1 previous)))
          (with-bindings (((u00 v00) (grib-get-uv f0c0 index))
@@ -98,11 +99,18 @@
                  (v0 (linear fraction v00 v10))
                  (u1 (linear fraction u01 u11))
                  (v1 (linear fraction v01 v11))
-                 (d (/ (- offset-new merge-start) merge-window)))
-             (log2:trace "Merging: ~,2,,'0,f, Fraction ~,2,,'0,f Current FC ~a " d fraction (params-forecast current))
+                 (d (/ (- offset merge-start) merge-window)))
+             (log2:trace "Merging: ~,2,,'0,f, Fraction ~,2,,'0,f, Step ~a " d fraction (params-forecast current))
              (let* ((uz (+ (* (- 1.0 d) u0) (* d u1)))
                     (vz (+ (* (- 1.0 d) v0) (* d v1))))
-               (values uz vz)))))))))
+               (values uz vz))))))
+      (T
+       (log2:trace "Using new, Offset ~,2,,'0,f, Fraction ~,2,,'0,f, Step ~a " offset fraction (params-forecast current))
+       (with-bindings (((u0 v0) (grib-get-uv f0c1 index))
+                       ((u1 v1) (grib-get-uv f1c1 index)))
+         (let ((u (linear fraction u0 u1))
+               (v (linear fraction v0 v1)))
+           (values u v)))))))
 
 (defun position-interpolate (wlat wlng s00 s01 s10 s11 a00 a01 a10 a11 u00 u01 u10 u11 v00 v01 v10 v11)
   (flet ((avg4 (x1 x2 x3 x4)
