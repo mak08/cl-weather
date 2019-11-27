@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2019-11-25 01:28:23>
+;;; Last Modified <michael 2019-11-27 20:25:12>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -100,8 +100,8 @@
                  (v1 (linear fraction v01 v11))
                  (d (/ (- offset-new merge-start) merge-window)))
              (log2:trace "Merging: ~,2,,'0,f, Fraction ~,2,,'0,f Current FC ~a " d fraction (params-forecast current))
-             (let* ((uz (+ (* (- 1.0 d) u1) (* d u0)))
-                    (vz (+ (* (- 1.0 d) v1) (* d v0))))
+             (let* ((uz (+ (* (- 1.0 d) u0) (* d u1)))
+                    (vz (+ (* (- 1.0 d) v0) (* d v1))))
                (values uz vz)))))))))
 
 (defun position-interpolate (wlat wlng s00 s01 s10 s11 a00 a01 a10 a11 u00 u01 u10 u11 v00 v01 v10 v11)
