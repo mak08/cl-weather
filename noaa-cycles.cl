@@ -1,25 +1,32 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2019-07-14 00:20:33>
+;;; Last Modified <michael 2020-01-17 21:52:10>
 
 (in-package "CL-WEATHER")
 
 (defun current-cycle ()
-  ;; The next cycle becomes available about 3:30h after the forecast computation starts.
+  ;; The next cycle becomes available (gradually) starting about 3:30h
+  ;; after the forecast computation starts.
   (let* ((avail-time (adjust-timestamp (now) (offset :minute (- 210))))
          (date (format-timestring nil avail-time :format '((:year 4) (:month 2) (:day 2))))
          (cycle (* 6 (truncate (timestamp-hour avail-time :timezone +utc-zone+) 6))))
     (values date cycle)))
 
 (defun available-cycle (timestamp)
-  ;; The next cycle becomes available about 3:30h after the forecast computation starts.
-  (let* ((avail-time (adjust-timestamp (now) (offset :minute (- 210))))
+  ;; If $timestamp is in the future:
+  ;;   If the forecasts already available from the latest cycle  cover $timestamp,
+  ;;   return the current cycle, otherwise retunr the previous cycle.
+  ;; If $timestamp is in the past, return the latest cycle the included it.
+  (let* ((now (now))
+         (diff (timestamp-difference timestamp now))
+         (avail-time (adjust-timestamp (if (< diff 0) timestamp now)
+                       (offset :minute (- 210))))
          (date (format-timestring nil avail-time :format '((:year 4) (:month 2) (:day 2))))
          (cycle (* 6 (truncate (timestamp-hour avail-time :timezone +utc-zone+) 6)))
-         (forecast (cycle-forecast date cycle timestamp))
          (elapsed (truncate (timestamp-difference (now)
                                                   (timespec-to-timestamp date cycle)) 60))
+         (forecast (cycle-forecast date cycle timestamp))
          (available (> elapsed (+ 210 (truncate forecast 3)))))
     (if available
         (values date cycle)

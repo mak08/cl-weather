@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2019-11-24 20:57:06>
+;;; Last Modified <michael 2020-03-31 22:15:48>
 
 (in-package "CL-WEATHER")
 
@@ -73,24 +73,25 @@
 ;;;
 ;;;   Download current cycle
 
-(defun download-latest-cycle ()
+(defun download-latest-cycle (&key (max-offset 384))
   (multiple-value-bind (date cycle)
       (latest-complete-cycle)
-    (download-cycle date cycle)))
+    (download-cycle date cycle :max-offset max-offset)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; DOWNLOAD-CYCLE
 ;;;
 ;;;   Download the specified cycle. If a forecast is (still) missing, wait or abort.
 
-(defun download-cycle (date cycle &key (if-missing :wait))
+(defun download-cycle (date cycle &key (max-offset 384) (if-missing :wait))
   (ecase cycle ((or 0 6 12 18)))
   (ecase if-missing ((or :wait :abort)))
   (log2:info "Downloading cycle ~a-~a" date cycle)
   (loop
      :with start-time = (now)
-     :for offset :across +noaa-forecast-offsets+
      :for count :from 1
+     :for offset :across +noaa-forecast-offsets+
+     :while (<= offset max-offset)
      :do (let* ((destpath
                  (noaa-destpath date :cycle cycle :offset offset)))
            (when (> (timestamp-difference (now) start-time) (* 60 60 3))
@@ -112,7 +113,7 @@
                      (:abort
                       (return-from download-cycle (values count cycle)))))
                   (t
-                   (log2:info "Downloading ~a/~a/~a" date cycle offset)
+                   (log2:info "Downloading ~a/~a/~a to ~a" date cycle offset destpath)
                    (let ((spec
                           (noaa-spec date :cycle cycle :offset offset)))
                      (multiple-value-bind

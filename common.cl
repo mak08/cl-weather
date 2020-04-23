@@ -1,11 +1,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2019-11-25 00:36:27>
+;;; Last Modified <michael 2020-02-22 21:44:32>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
 (in-package "CL-WEATHER")
+(setf (log2:log-level "cl-weather") log2:+info+)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Common in all modules
@@ -54,7 +55,7 @@
        (lonpoints (gribinfo-lon-points info))
        (lat-offset (* lat-index lonpoints))
        (uv-index (+ lat-offset lon-index)))
-    (log2:trace "Lat: ~a Lng: ~a Index: ~a" lat lon uv-index)
+    ;;(log2:trace "Lat: ~a Lng: ~a Index: ~a" lat lon uv-index)
     uv-index))
 
 
@@ -74,7 +75,7 @@
 (defun grib-get-uv (uv index)
   (let ((u (aref (uv-u-array uv) index))
         (v (aref (uv-v-array uv) index)))
-    (log2:trace "~a => ~,2,,'0,f,~,2,,'0,f" index (angle u v) (enorm u v))
+    ;;(log2:trace "~a => ~,2,,'0,f,~,2,,'0,f" index (angle u v) (enorm u v))
     (values u v)))
 (declaim (notinline grib-get-uv))
 
@@ -155,6 +156,7 @@
              (p-offset (/ (timestamp-difference (params-timestamp previous)
                                                 (params-base-time previous))
                           3600.0)))
+        (log2:trace "Using  cycle ~a/~a" date1 cycle1)
         (log2:trace "Offset in current cycle:  ~a" c-offset)
         (log2:trace "Offset in previous cycle: ~a" p-offset)
         (make-iparams :current current
