@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2019-11-27 23:38:07>
+;;; Last Modified <michael 2020-07-07 00:23:17>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -72,10 +72,10 @@
   (let* ((fraction (params-fraction current))
          (f0c1 (params-fc0 current))
          (f1c1 (params-fc1 current))
-         ;; Merge new and old if we are between 4-6h into the new forecast
-         ;; (by this time, most of the new forecast should be available)
+         ;; Merge new and old if we are between 4-6.5h into the new forecast
+         ;; (0.5-3.0h of the cycle)
          (merge-start 4.0)
-         (merge-window 2.0))
+         (merge-window 2.5))
     (cond
       ((and previous
             (< offset merge-start))
