@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2020-03-31 22:15:48>
+;;; Last Modified <michael 2020-09-26 21:35:05>
 
 (in-package "CL-WEATHER")
 
@@ -11,6 +11,10 @@
 ;;;
 ;;; Example URL:
 ;;;    http://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_1p00.pl?file=gfs.t12z.pgrb2.1p00.f000&lev_10_m_above_ground=on&var_UGRD=on&var_VGRD=on&leftlon=0&rightlon=360&toplat=90&bottomlat=-90&dir=%2Fgfs.2017091712
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; GEFS containing UGRD 10m:
+;;; https://nomads.ncep.noaa.gov/pub/data/nccf/com/gens/prod/gefs.20200924/12/atmos/pgrb2ap5/gep01.t12z.pgrb2a.0p50.f027.idx
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Retrieving NOAA wind forecasts
@@ -33,6 +37,8 @@
 ;;;    06     09:30Z            11:00Z
 ;;;    12     15:30Z            17:00Z
 ;;;    18     21:30Z            23:00Z
+
+(defvar *noaa-gfs-path* "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; DOWNLOAD-CYCLE
@@ -118,7 +124,7 @@
                           (noaa-spec date :cycle cycle :offset offset)))
                      (multiple-value-bind
                            (out error-out status)
-                         (download-noaa-file% date cycle spec destpath)))))))))
+                         (download-noaa-file% date cycle offset destpath)))))))))
        :finally (return (values count cycle))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -126,16 +132,20 @@
 
 (defun noaa-file-exists-p (date cycle offset)
   "Check if the specified forecast exists. $date='YYYYMMDD', $cycle='CC', $offset may be numeric or string."
-  (let* ((spec
-          (noaa-spec date :cycle cycle :offset offset))
-         (url
-          (format nil "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a/~a" date cycle spec))
-         (command
-          (format () "curl -sfI ~a" url)))
-    (log2:trace "~a" command)
+  (let* ((fc-url
+          (noaa-file date cycle offset))
+         (idx-url
+          (noaa-index-file date cycle offset))
+         (check-fc
+          (format () "curl -sfI --connect-timeout 2 ~a" fc-url))
+         (check-idx
+          (format () "curl -sfI --connect-timeout 2 ~a" idx-url)))
+    (log2:trace "Checking ~a + .idx" fc-url)
     (handler-case 
-        (null (uiop:run-program command))
-      (uiop/run-program:subprocess-error ()
+       (and (null (uiop:run-program check-fc))
+            (null (uiop:run-program check-idx)))
+      (uiop/run-program:subprocess-error (e)
+        (log2:trace "curl error: ~a" e)
         nil))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -154,7 +164,7 @@
        (log2:trace "~a(~a:~a)" destpath date cycle)
        (multiple-value-bind
              (out error-out status)
-           (download-noaa-file% date cycle spec destpath)
+           (download-noaa-file% date cycle offset destpath)
          (case status
            (0
             (let ((download-size
@@ -180,9 +190,22 @@
        (lambda (c) (eql c #\7))
        closing-bytes))))
 
-(defun download-noaa-file% (date cycle spec destpath &key (resolution "1p00"))
+
+(defvar *use-range-query* nil)
+
+(defun download-noaa-file% (date cycle offset destpath &key (resolution "1p00"))
   "Retrieve the GRIB file valid at timestamp according to VR rules"
-  (let* ((dest-folder
+  (if *use-range-query*
+      (grib2-download-file-u-v-10 date cycle offset :resolution resolution)
+      (download-noaa-file%% date cycle offset destpath :resolution resolution)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Download by filter
+
+(defun download-noaa-file%% (date cycle offset destpath &key (resolution "1p00"))
+  "Retrieve the GRIB file valid at timestamp according to VR rules"
+  (let* ((spec (noaa-spec date :cycle cycle :offset offset))
+         (dest-folder
           *grib-directory*)
          (query
           (format nil "~a&~a&~a&~a&~a&~a&~a&~a&~a"
@@ -204,17 +227,152 @@
     (uiop:run-program ftp-command)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Download by range query
+(defvar *grib-index-ht* (make-hash-table :test #'equalp))
+
+(defun grib2-download-file-u-v-10 (date cycle offset &key (resolution "1p00"))
+  (let* ((destpath (noaa-destpath date :cycle cycle :offset offset))
+         (spec (format nil "~a~a~a" date cycle offset))
+         (index (or (gethash spec *grib-index-ht*)
+                    (setf (gethash spec *grib-index-ht*)
+                          (grib2-get-index date cycle offset :resolution resolution)))))
+    (multiple-value-bind (start end)
+        (grib2-get-u-v-10-range index)
+      (let* ((path
+              (noaa-file date cycle offset))
+             (url
+              (format nil "~a -H \"Range: bytes=~a-~a\""
+                      path
+                      start
+                      end))
+             (command (format () "curl ~a\ -o ~a" url destpath)))
+        (log2:trace "Command: ~a" command)
+        (uiop:run-program command)))))
+
+(defun grib2-get-index (date cycle offset &key (resolution "1p00"))
+  (let* ((url
+          (format nil
+                  "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a/gfs.t~2,,,'0@az.pgrb2.~a.f~3,,,'0@a.idx"
+                  date cycle cycle resolution offset))
+         (response
+          (http-get url))
+         (status-code
+          (http-status-code
+           (http-response-status response)))
+         (status-text
+          (http-status-text
+           (http-response-status response))))
+    (cond
+      ((= status-code 200)
+       (http-response-body response))
+      (t
+       (error "Unexpected HTTP status ~a ~a for URL ~a" status-code status-text url)))))
+
+(defun grib2-get-u-v-10-range (s)
+  (let* ((u10
+          (search ":UGRD:10 m above ground:" s))
+         (u10-start
+          (1+ (position #\Newline s :from-end t :end u10)))
+         (u10-end
+          (1+ (position #\Newline s :from-end nil :start u10)))
+         (v10-end
+          (1+ (position #\Newline s :from-end nil :start u10-end)))
+         (next-end
+          (1+ (position #\Newline s :from-end nil :start v10-end)))
+         (u10-entry
+          (subseq s u10-start (1- u10-end)))
+         (next-entry
+          (subseq s v10-end (1- next-end)))
+         (u10-range-start
+          (second
+           (cl-utilities:split-sequence #\: u10-entry)))
+         (range-end
+          (second
+           (cl-utilities:split-sequence #\: next-entry))))
+    (values (parse-integer u10-range-start)
+            (1- (parse-integer range-end)))))
+
+(defun http-get (url &key (headers ()))
+  (let ((ftp-command
+         (format () "curl -i ~{ -H ~a~} \"~a\"" headers url))
+        (out-stream (make-array '(0) :element-type 'base-char :fill-pointer 0 :adjustable t))
+        (err-stream (make-array '(0) :element-type 'base-char :fill-pointer 0 :adjustable t)))
+    (log2:trace "~a" ftp-command)
+    (with-output-to-string (out out-stream)
+      (with-output-to-string (err err-stream)
+        (multiple-value-bind (out-status err-status program-status)
+            (uiop:run-program ftp-command :output out :error-output err)
+          (case program-status
+            (0
+             (parse-http-response out-stream))
+            (t
+             (error "curl failed with code ~a" program-status))))))))
+
+(defstruct http-response status headers body)
+(defun parse-http-response (s)
+  (with-input-from-string (f s)
+    (let*
+        ((status-line
+          (parse-status-line (read-line f nil nil)))
+         (headers
+          (loop
+             :for line = (read-line f nil nil)
+             :while  (> (length line) 1)
+             :collect (parse-http-header line)))
+         (content-length
+          (parse-integer
+           (http-header-value
+            (find-if (lambda (h) (string-equal (http-header-name h) "Content-Length"))
+                     headers))))
+         (buffer
+          (make-array content-length :element-type 'character))
+         (count
+          (read-sequence buffer f)))
+      (make-http-response :status status-line
+                          :headers headers
+                          :body buffer))))
+
+(defstruct http-status protocol code text)
+(defun parse-status-line (s)
+  (let* ((p1 (position #\Space s))
+         (p2 (position #\Space s :start (1+ p1)))) 
+    (make-http-status :protocol (subseq s 0 p1)
+                      :code (parse-integer (subseq s (1+ p1) p2))
+                      :text (string-trim " "
+                                         (subseq s (1+ p2))))))
+
+(defstruct http-header name value)
+(defun parse-http-header (s)
+  (let ((p (position #\: s)))
+    (make-http-header :name (subseq s 0 p)
+                      :value (string-trim " " (subseq s (1+ p))))))
+                                          
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Grib filter input file name 
 
 (defun noaa-spec (date &key (cycle 0) (offset 6) (basename "pgrb2") (resolution "1p00"))
   (format () "gfs.t~2,,,'0@az.~a.~a.f~3,,,'0@a" cycle basename resolution offset))
+
+(defun noaa-file (date cycle offset &key (basename "pgrb2") (resolution "1p00"))
+  (format () "~?/~a"
+          *noaa-gfs-path*
+          (list date
+                cycle)
+          (noaa-spec date :cycle cycle :offset offset)))
+
+(defun noaa-index-file (date cycle offset &key (basename "pgrb2") (resolution "1p00"))
+  (format () "~?/~a.idx"
+          *noaa-gfs-path*
+          (list date
+                cycle)
+          (noaa-spec date :cycle cycle :offset offset)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Local forecast file name
 
 (defun noaa-destpath (date &key (cycle 0) (offset 6) (basename "pgrb2") (resolution "1p00"))
   (let* ((spec
-          (noaa-spec date :cycle cycle :offset offset))
+          (noaa-spec date :cycle cycle :offset offset  :basename "pgrb2" :resolution "1p00"))
          (destfile 
           (format () "~a_~a.grib2" date spec)))
     (merge-pathnames destfile *grib-directory*)))
