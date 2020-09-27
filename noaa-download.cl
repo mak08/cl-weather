@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2020-03-31 22:15:48>
+;;; Last Modified <michael 2020-09-27 23:56:26>
 
 (in-package "CL-WEATHER")
 
@@ -38,6 +38,8 @@
 ;;; DOWNLOAD-CYCLE
 ;;;    
 ;;;   Search backwards from $start to find a complete cycle
+
+(defvar *connect-timeout* "2")
 
 (defun download-cycle-backtrack (&optional (start (now)))
   ;; Retry to download starting with the latest available cycle
@@ -131,7 +133,7 @@
          (url
           (format nil "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a/~a" date cycle spec))
          (command
-          (format () "curl -sfI ~a" url)))
+          (format () "curl -sfI --connect-timeout ~a ~a" *connect-timeout* url)))
     (log2:trace "~a" command)
     (handler-case 
         (null (uiop:run-program command))
@@ -199,7 +201,7 @@
           (format nil
                   "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_~a.pl?~a" resolution query))
          (ftp-command
-          (format () "curl -n \"~a\" -o ~a" url destpath)))
+          (format () "curl --connect-timeout ~a -n \"~a\" -o ~a" *connect-timeout* url destpath)))
     (log2:trace "~a" ftp-command)
     (uiop:run-program ftp-command)))
 
