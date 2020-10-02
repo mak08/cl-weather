@@ -1,11 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-<<<<<<< HEAD
-;;; Last Modified <michael 2020-09-28 00:02:53>
-=======
-;;; Last Modified <michael 2020-09-26 21:35:05>
->>>>>>> fc783d637d8978a3b6bff793cd2b9deaf889520b
+;;; Last Modified <michael 2020-10-02 17:43:06>
 
 (in-package "CL-WEATHER")
 
