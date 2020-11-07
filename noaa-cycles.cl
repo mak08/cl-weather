@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2020-09-24 22:10:25>
+;;; Last Modified <michael 2020-11-01 16:57:23>
 
 (in-package "CL-WEATHER")
 
@@ -77,30 +77,26 @@
     327 330 333 336 339 342 345 348 351 354
     357 360 363 366 369 372 375 378 381 384))
 
+;; Return the 3-hour-forecast required for $timestamp when using $cycle
 (defun cycle-forecast (date cycle timestamp)
   (ecase cycle ((0 6 12 18)))
   (let* ((basetime (timespec-to-timestamp date cycle)) 
-         (difference (timestamp-difference timestamp basetime)))
-    (when (minusp difference)
-      (error "~a is in the past of ~a" timestamp basetime))
-    (setf difference (truncate difference 3600))
+         (difference (truncate
+                      (timestamp-difference timestamp basetime)
+                      3600)))
     (cond
-      ((<= 0 difference 239)
+      ((minusp difference)
+       (error "~a is in the past of ~a-~a" timestamp date cycle))
+      ((<= difference 384)
        (* 3 (truncate difference 3)))
-      ((<= 240 difference 384)
-       (* 12 (truncate difference 12)))
       (t
-       (error "~a is in the future of cycle ~a/~a" timestamp date cycle)))))
+       (log2:warning "~a is in the future of cycle ~a-~a" timestamp date cycle)
+       384))))
 
+;; Return the next 3-hour-forecast
 (defun next-forecast (forecast)
   (assert (find forecast +noaa-forecast-offsets+ :test #'eql))
-  (cond
-    ((<= forecast 237)
-     (+ forecast 3))
-    ((<= forecast 372)
-     (+ forecast 12))
-    ((= forecast 384)
-     384)))
+  (min (+ forecast 3) 384))
   
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
