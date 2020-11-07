@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2020-02-22 21:44:32>
+;;; Last Modified <michael 2020-11-01 16:51:43>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -58,18 +58,20 @@
     ;;(log2:trace "Lat: ~a Lng: ~a Index: ~a" lat lon uv-index)
     uv-index))
 
-
 (defun dataset-forecast (dataset)
   (aref (dataset-forecasts dataset) 0))
 
 (defun forecast-fraction (fc0 fc1 timestamp)
   (let ((delta (timestamp-difference (uv-forecast-time fc1) (uv-forecast-time fc0)))
         (s0 (timestamp-difference timestamp (uv-forecast-time fc0))))
-    (assert (plusp delta))
-    (assert (not (minusp s0)))
-    (let ((fraction (coerce (/ s0 delta) 'double-float)))
-      (log2:trace "TS: ~a FC0: ~a FC1: ~a Fraction: ~a" timestamp fc0 fc1 fraction)
-      fraction)))
+    (cond
+      ((eql delta 0)
+       0d0)
+      (t
+       (assert (not (minusp s0)))
+       (let ((fraction (coerce (/ s0 delta) 'double-float)))
+         (log2:trace "TS: ~a FC0: ~a FC1: ~a Fraction: ~a" timestamp fc0 fc1 fraction)
+         fraction)))))
 
 (declaim (inline grib-get-uv))
 (defun grib-get-uv (uv index)
@@ -143,9 +145,13 @@
 
 (defstruct iparams current previous offset)
 
-(defun interpolation-parameters (timestamp)
+(defun interpolation-parameters (timestamp &optional (cycle nil))
   (multiple-value-bind  (date1 cycle1)
       (available-cycle timestamp)
+    (when cycle
+      (multiple-value-setq (date1 cycle1)
+        (timestamp-to-timespec (parse-timestring cycle))))
+    (log2:trace "Using cycle ~a-~a" date1 cycle1)
     (multiple-value-bind (date0 cycle0)
         (previous-cycle date1 cycle1)
       (let* ((current (prediction-parameters timestamp :date date1 :cycle cycle1))

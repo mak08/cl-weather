@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2019-06-26 22:43:32>
+;;; Last Modified <michael 2020-10-24 18:07:05>
 
 (in-package :cl-weather)
 
@@ -11,9 +11,15 @@
 ;;;
 ;;; - The dataset may contain forecast (uv) data from different cycles (during the
 ;;;   update phase).
-;;  - The dataset basetime reflects the forecast time of the first forecast.
+;;; - The dataset basetime reflects the forecast time of the first forecast.
 ;;; - The offsets of the forecasts are recomputed w.r.t. the new basetime when the
 ;;;   dataset is shifted before the update phase.
+
+;;; TODO: Use struct CYCLE throughout to specify the forecast cycle
+(defstruct cycle
+  :date                                 ; Format: YYYYMMDD
+  :hour                                 ; 0, 6, 12, 18 (for NOAA)
+  )
 
 (defstruct dataset
   basetime                              ; Base time of forecast data

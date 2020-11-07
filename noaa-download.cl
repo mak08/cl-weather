@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2020-10-02 17:43:06>
+;;; Last Modified <michael 2020-10-31 16:54:38>
 
 (in-package "CL-WEATHER")
 
@@ -121,7 +121,6 @@
                      (:abort
                       (return-from download-cycle (values count cycle)))))
                   (t
-                   (log2:info "Downloading ~a/~a/~a to ~a" date cycle offset destpath)
                    (let ((spec
                           (noaa-spec date :cycle cycle :offset offset)))
                      (multiple-value-bind
@@ -206,6 +205,7 @@
 
 (defun download-noaa-file%% (date cycle offset destpath &key (resolution "1p00"))
   "Retrieve the GRIB file valid at timestamp according to VR rules"
+  (log2:info "Downloading ~a/~a/~a to ~a" date cycle offset destpath)
   (let* ((spec (noaa-spec date :cycle cycle :offset offset))
          (dest-folder
           *grib-directory*)
@@ -238,6 +238,7 @@
          (index (or (gethash spec *grib-index-ht*)
                     (setf (gethash spec *grib-index-ht*)
                           (grib2-get-index date cycle offset :resolution resolution)))))
+    (log2:info "Downloading ~a/~a/~a to ~a" date cycle offset destpath)
     (multiple-value-bind (start end)
         (grib2-get-u-v-10-range index)
       (let* ((path
@@ -264,6 +265,7 @@
          (status-text
           (http-status-text
            (http-response-status response))))
+    (log2:trace "Retrieving index for ~a/~a/~a" date cycle offset)
     (cond
       ((= status-code 200)
        (http-response-body response))
