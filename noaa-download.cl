@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2020-10-31 16:54:38>
+;;; Last Modified <michael 2020-12-04 18:55:27>
 
 (in-package "CL-WEATHER")
 
@@ -45,7 +45,8 @@
 ;;;    
 ;;;   Search backwards from $start to find a complete cycle
 
-(defvar *connect-timeout* "2")
+(defparameter *connect-timeout* "5")
+(defparameter *retry-interval* 30)
 
 (defun download-cycle-backtrack (&optional (start (now)))
   ;; Retry to download starting with the latest available cycle
@@ -115,8 +116,8 @@
                   ((not (noaa-file-exists-p date cycle offset))
                    (ecase if-missing
                      (:wait
-                      (log2:info "Wait 1m for ~a/~a/~a" date cycle offset)
-                      (sleep 60)
+                      (log2:info "Wait ~as for ~a/~a/~a" *retry-interval* date cycle offset)
+                      (sleep *retry-interval*)
                       (go :retry))
                      (:abort
                       (return-from download-cycle (values count cycle)))))
@@ -138,9 +139,9 @@
          (idx-url
           (noaa-index-file date cycle offset))
          (check-fc
-          (format () "curl -sfI --connect-timeout 2 ~a" fc-url))
+          (format () "curl -sfI --connect-timeout ~a ~a" *connect-timeout* fc-url))
          (check-idx
-          (format () "curl -sfI --connect-timeout 2 ~a" idx-url)))
+          (format () "curl -sfI --connect-timeout ~a ~a" *connect-timeout* idx-url)))
     (log2:trace "Checking ~a + .idx" fc-url)
     (handler-case 
        (and (null (uiop:run-program check-fc))
@@ -152,7 +153,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Download forecast
 
-(defun download-noaa-file (date cycle offset)
+(defun download-noaa-file (date cycle offset &key (use-previous nil))
   (let* ((spec (noaa-spec date :cycle cycle :offset offset))
          (destpath (noaa-destpath date :cycle cycle :offset offset)))
     (cond
@@ -171,10 +172,18 @@
             (let ((download-size
                    (with-open-file (f destpath)
                      (file-length f))))
-              (when (< download-size 50000)
-                (log2:warning  "Deleting ~a (short file). Forecast not available yet?" destpath)
-                (uiop:delete-file-if-exists destpath)
-                (error "Forecast ~a:~a short file, not available yet?" date spec))))
+              (cond
+                ((and (< download-size 50000) use-previous)
+                 (log2:warning  "Deleting ~a (short file), trying previous." destpath)
+                 (uiop:delete-file-if-exists destpath)
+                 (multiple-value-bind (prev-date prev-cycle)
+                     (previous-cycle date cycle)
+                   (return-from download-noaa-file
+                     (download-noaa-file prev-date prev-cycle offset :use-previous nil))))
+                ((< download-size 50000)
+                 (log2:warning  "Deleting ~a (short file), giving up." destpath)
+                 (uiop:delete-file-if-exists destpath)
+                 (error "Forecast ~a:~a short file, not available yet?" date spec)))))
            (otherwise
             (error "cURL error ~a" status))))))
     destpath))

@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Access to NOAA forecasts (non-interpolated)
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2019-08-06 23:13:13>
+;;; Last Modified <michael 2020-11-13 23:41:50>
 
 (in-package "CL-WEATHER")
 
@@ -21,7 +21,8 @@
   (let ((filename (namestring (noaa-destpath date :cycle cycle :offset offset)))
         (index (codes-index-new '("step" "shortName"))))
     (when load-missing
-      (download-noaa-file date cycle offset))
+      (setf filename
+            (namestring (download-noaa-file date cycle offset))))
     (log2:trace "Add file ~a~%" filename)
     (let ((retcode (codes-index-add-file index filename)))
       (case retcode

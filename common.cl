@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2020-11-01 16:51:43>
+;;; Last Modified <michael 2020-12-06 15:56:58>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -20,6 +20,8 @@
 (defvar *grib-directory*
   (merge-pathnames (make-pathname :directory '(:relative "gribfiles")) *source-root*))
 
+(defparameter *merge-window* 2.5d0)
+(defparameter *merge-start* 4.0d0)
 
 (declaim (inline normalized-lat))
 (defun normalized-lat (lat)
@@ -151,20 +153,19 @@
     (when cycle
       (multiple-value-setq (date1 cycle1)
         (timestamp-to-timespec (parse-timestring cycle))))
-    (log2:trace "Using cycle ~a-~a" date1 cycle1)
     (multiple-value-bind (date0 cycle0)
         (previous-cycle date1 cycle1)
       (let* ((current (prediction-parameters timestamp :date date1 :cycle cycle1))
-             (previous (prediction-parameters timestamp :date date0 :cycle cycle0))
              (c-offset (/ (timestamp-difference (params-timestamp current)
                                                 (params-base-time current))
                          3600.0))
-             (p-offset (/ (timestamp-difference (params-timestamp previous)
-                                                (params-base-time previous))
-                          3600.0)))
-        (log2:trace "Using  cycle ~a/~a" date1 cycle1)
-        (log2:trace "Offset in current cycle:  ~a" c-offset)
-        (log2:trace "Offset in previous cycle: ~a" p-offset)
+             (previous (when  (<= c-offset (+ *merge-start* *merge-window*))
+                         (prediction-parameters timestamp :date date0 :cycle cycle0)))
+             (p-offset (when  (<= c-offset (+ *merge-start* *merge-window*))
+                         (/ (timestamp-difference (params-timestamp previous)
+                                                  (params-base-time previous))
+                            3600.0))))
+        (log2:trace "Current: ~a-~a+~a  previous: ~a" date1 cycle1 (truncate (* c-offset 60)) (not (null previous)))
         (make-iparams :current current
                       :previous previous
                       :offset c-offset)))))
