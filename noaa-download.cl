@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2020-12-04 18:55:27>
+;;; Last Modified <michael 2020-12-12 20:30:17>
 
 (in-package "CL-WEATHER")
 
@@ -45,7 +45,7 @@
 ;;;    
 ;;;   Search backwards from $start to find a complete cycle
 
-(defparameter *connect-timeout* "5")
+(defparameter *connect-timeout* "10")
 (defparameter *retry-interval* 30)
 
 (defun download-cycle-backtrack (&optional (start (now)))
@@ -103,15 +103,15 @@
      :while (<= offset max-offset)
      :do (let* ((destpath
                  (noaa-destpath date :cycle cycle :offset offset)))
-           (when (> (timestamp-difference (now) start-time) (* 60 60 3))
-             (log2:error "Giving up download of ~a/~a at offset ~a" date cycle offset)
-             (error "Incomplete cycle ~a/~a" date cycle))
            (cond
              ((probe-file destpath)
               (log2:info "File exists: ~a)" destpath))
              (t
               (tagbody
                 :retry
+                (when (> (timestamp-difference (now) start-time) (* 60 60 3))
+                  (log2:error "Giving up download of ~a/~a at offset ~a" date cycle offset)
+                  (error "Incomplete cycle ~a/~a" date cycle))
                 (cond
                   ((not (noaa-file-exists-p date cycle offset))
                    (ecase if-missing
@@ -126,8 +126,12 @@
                           (noaa-spec date :cycle cycle :offset offset)))
                      (multiple-value-bind
                            (out error-out status)
-                         (download-noaa-file% date cycle offset destpath)))))))))
-       :finally (return (values count cycle))))
+                         (handler-case 
+                             (download-noaa-file% date cycle offset destpath)
+                           (uiop/run-program:subprocess-error (e)
+                             (log2:trace "curl error: ~a" e)
+                             (go :retry)))))))))))
+     :finally (return (values count cycle))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Check if forecast exists on server
