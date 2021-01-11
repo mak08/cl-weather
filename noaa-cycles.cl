@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-01-11 17:49:22>
+;;; Last Modified <michael 2021-01-11 18:04:14>
 
 (in-package "CL-WEATHER")
 
@@ -95,7 +95,8 @@
 
 ;; Return the next 3-hour-forecast
 (defun next-forecast (forecast)
-  (assert (find forecast +noaa-forecast-offsets+ :test #'eql))
+  (assert (or (= forecast 0)
+              (find forecast +noaa-forecast-offsets+ :test #'eql)))
   (min (+ forecast 3) 384))
   
 ;;; EOF
