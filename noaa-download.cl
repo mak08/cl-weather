@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2020-12-12 20:30:17>
+;;; Last Modified <michael 2021-01-22 22:43:54>
 
 (in-package "CL-WEATHER")
 
@@ -14,7 +14,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; GEFS containing UGRD 10m:
-;;; https://nomads.ncep.noaa.gov/pub/data/nccf/com/gens/prod/gefs.20200924/12/atmos/pgrb2ap5/gep01.t12z.pgrb2a.0p50.f027.idx
+;;; https://nomads.ncep.noaa.gov/data/nccf/com/gens/prod/gefs.20200924/12/atmos/pgrb2ap5/gep01.t12z.pgrb2a.0p50.f027.idx
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Retrieving NOAA wind forecasts
@@ -38,7 +38,7 @@
 ;;;    12     15:30Z            17:00Z
 ;;;    18     21:30Z            23:00Z
 
-(defvar *noaa-gfs-path* "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a")
+(defvar *noaa-gfs-path* "https://ftpprd.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; DOWNLOAD-CYCLE
@@ -235,7 +235,7 @@
                   "bottomlat=-80"))
          (url
           (format nil
-                  "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_~a.pl?~a" resolution query))
+                  "https://ftpprd.ncep.noaa.gov/cgi-bin/filter_gfs_~a.pl?~a" resolution query))
          (ftp-command
           (format () "curl --connect-timeout ~a -n \"~a\" -o ~a" *connect-timeout* url destpath)))
     (log2:trace "~a" ftp-command)
@@ -268,7 +268,7 @@
 (defun grib2-get-index (date cycle offset &key (resolution "1p00"))
   (let* ((url
           (format nil
-                  "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a/gfs.t~2,,,'0@az.pgrb2.~a.f~3,,,'0@a.idx"
+                  "https://ftpprd.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a/gfs.t~2,,,'0@az.pgrb2.~a.f~3,,,'0@a.idx"
                   date cycle cycle resolution offset))
          (response
           (http-get url))
