@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-01-11 18:04:14>
+;;; Last Modified <michael 2021-03-20 03:44:09>
 
 (in-package "CL-WEATHER")
 
@@ -9,7 +9,7 @@
   ;; The next cycle becomes available (gradually) starting about 3:30h
   ;; after the forecast computation starts.
   (let* ((avail-time (adjust-timestamp (now) (offset :minute (- 210))))
-         (date (format-timestring nil avail-time :format '((:year 4) (:month 2) (:day 2))))
+         (date (format-timestring nil avail-time :format '((:year 4) (:month 2) (:day 2)) :timezone +utc-zone+))
          (cycle (* 6 (truncate (timestamp-hour avail-time :timezone +utc-zone+) 6))))
     (values date cycle)))
 
@@ -63,7 +63,7 @@
 
 
 (defparameter +noaa-forecast-offsets+
-  #(    3   6   9   12  15  18  21  24
+  #(0   3   6   9   12  15  18  21  24
     27  30  33  36  39  42  45  48  51   54
     57  60  63  66  69  72  75  78  81   84
     87  90  93  96  99  102 105 108 111 114

@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-01-22 22:43:54>
+;;; Last Modified <michael 2021-03-05 01:31:39>
 
 (in-package "CL-WEATHER")
 
@@ -38,8 +38,10 @@
 ;;;    12     15:30Z            17:00Z
 ;;;    18     21:30Z            23:00Z
 
+(defvar *use-range-query* t)
+;; The FTP folder only works with range query, not with a filter URL
 (defvar *noaa-gfs-path* "https://ftpprd.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a")
-
+;;              https://para.nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/para/
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; DOWNLOAD-CYCLE
 ;;;    
@@ -204,8 +206,6 @@
        (lambda (c) (eql c #\7))
        closing-bytes))))
 
-
-(defvar *use-range-query* nil)
 
 (defun download-noaa-file% (date cycle offset destpath &key (resolution "1p00"))
   "Retrieve the GRIB file valid at timestamp according to VR rules"

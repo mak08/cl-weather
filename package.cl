@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2020-10-25 16:27:21>
+;;; Last Modified <michael 2021-02-07 15:44:31>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
@@ -12,6 +12,7 @@
         "LOCAL-TIME"
         "CL-MAP")
   (:export "*GRIB-DIRECTORY*"
+           "*USE-RANGE-QUERY*"
            "NOAA-START-UPDATES"
            "LATEST-COMPLETE-CYCLE"
            "AVAILABLE-CYCLE"
