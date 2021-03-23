@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-03-20 03:44:09>
+;;; Last Modified <michael 2021-03-21 03:37:33>
 
 (in-package "CL-WEATHER")
 
@@ -22,7 +22,7 @@
          (diff (timestamp-difference timestamp now))
          (avail-time (adjust-timestamp (if (< diff 0) timestamp now)
                        (offset :minute (- 210))))
-         (date (format-timestring nil avail-time :format '((:year 4) (:month 2) (:day 2))))
+         (date (format-timestring nil avail-time :format '((:year 4) (:month 2) (:day 2)) :timezone +utc-zone+))
          (cycle (* 6 (truncate (timestamp-hour avail-time :timezone +utc-zone+) 6)))
          (elapsed (truncate (timestamp-difference (now)
                                                   (timespec-to-timestamp date cycle)) 60))

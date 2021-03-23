@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-03-05 01:31:39>
+;;; Last Modified <michael 2021-03-22 23:45:44>
 
 (in-package "CL-WEATHER")
 
@@ -40,7 +40,7 @@
 
 (defvar *use-range-query* t)
 ;; The FTP folder only works with range query, not with a filter URL
-(defvar *noaa-gfs-path* "https://ftpprd.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a")
+(defvar *noaa-gfs-path* "https://ftpprd.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a/atmos/")
 ;;              https://para.nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/para/
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; DOWNLOAD-CYCLE
@@ -268,7 +268,7 @@
 (defun grib2-get-index (date cycle offset &key (resolution "1p00"))
   (let* ((url
           (format nil
-                  "https://ftpprd.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a/gfs.t~2,,,'0@az.pgrb2.~a.f~3,,,'0@a.idx"
+                  "https://ftpprd.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a/atmos/gfs.t~2,,,'0@az.pgrb2.~a.f~3,,,'0@a.idx"
                   date cycle cycle resolution offset))
          (response
           (http-get url))

@@ -1,9 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2020-12-06 15:56:58>
-
-;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
+;;; Last Modified <michael 2021-03-20 20:55:24>
 
 (in-package "CL-WEATHER")
 (setf (log2:log-level "cl-weather") log2:+info+)
