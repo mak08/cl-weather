@@ -1,12 +1,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2021-02-07 15:44:31>
+;;; Last Modified <michael 2021-03-25 20:11:27>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
         #+sbcl "SB-MOP"
         "CFFI"
+        "MACROS"
         "CL-GEOMATH"
         "CL-ECCODES"
         "LOCAL-TIME"
