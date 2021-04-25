@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2020-12-06 16:26:19>
+;;; Last Modified <michael 2021-04-11 14:25:02>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -72,8 +72,6 @@
   (let* ((fraction (params-fraction current))
          (f0c1 (params-fc0 current))
          (f1c1 (params-fc1 current))
-         ;; Merge new and old if we are between 4-6.5h into the new forecast
-         ;; (0.5-3.0h of the cycle)
          (merge-start *merge-start*)
          (merge-window *merge-window*))
     (cond
@@ -88,6 +86,7 @@
                  (v (linear fraction v0 v1)))
              (values u v)))))
       ((and previous
+            (> merge-window 0)
             (<= merge-start offset (+ merge-start merge-window)))
        (let ((f0c0 (params-fc0 previous))
              (f1c0 (params-fc1 previous)))
