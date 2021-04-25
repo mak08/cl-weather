@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-04-11 14:18:33>
+;;; Last Modified <michael 2021-04-25 22:29:47>
 
 (in-package "CL-WEATHER")
 (setf (log2:log-level "cl-weather") log2:+info+)
@@ -18,13 +18,14 @@
 (defvar *grib-directory*
   (merge-pathnames (make-pathname :directory '(:relative "gribfiles")) *source-root*))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Merge new and old if we are between 4-6.5h into the new forecast
 ;; (0.5-3.0h of the cycle)
 
-(defparameter *merge-window* 0.0d0)
-(defparameter *merge-start* 6.0d0)
+(defvar *merge-window* 0.0d0)
+(defvar *merge-start* 6.0d0)
+
+(defvar *interpolation* :enorm)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Helpers

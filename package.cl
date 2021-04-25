@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2021-04-18 20:47:31>
+;;; Last Modified <michael 2021-04-25 22:28:05>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
@@ -14,6 +14,9 @@
         "CL-MAP")
   (:export "*GRIB-DIRECTORY*"
            "*USE-RANGE-QUERY*"
+           "*INTERPOLATION*"
+           "*MERGE-START*"
+           "*MERGE-WINDOW*"
            "NOAA-START-UPDATES"
            "LATEST-COMPLETE-CYCLE"
            "AVAILABLE-CYCLE"
