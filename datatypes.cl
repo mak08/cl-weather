@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2021-03-26 13:00:06>
+;;; Last Modified <michael 2021-05-02 00:31:21>
 
 (in-package :cl-weather)
 
@@ -33,7 +33,6 @@
 (defmethod print-object ((thing dataset) stream)
   (format stream "{dataset base=~a}"
           (format-datetime nil (dataset-basetime thing))))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Forecast parameters
@@ -151,16 +150,17 @@
   (aref (dataset-forecasts dataset) 0))
 
 (defun forecast-fraction (fc0 fc1 timestamp)
-  (let ((delta (timestamp-difference (uv-forecast-time fc1) (uv-forecast-time fc0)))
-        (s0 (timestamp-difference timestamp (uv-forecast-time fc0))))
+  (duration-fraction  (uv-forecast-time fc0) (uv-forecast-time fc1) timestamp))
+
+(defun duration-fraction (ts0 ts1 ts)
+  (let ((delta (timestamp-difference ts1 ts0))
+        (s0 (timestamp-difference ts ts0)))
     (cond
       ((eql delta 0)
        0d0)
       (t
        (assert (not (minusp s0)))
-       (let ((fraction (coerce (/ s0 delta) 'double-float)))
-         (log2:trace "TS: ~a FC0: ~a FC1: ~a Fraction: ~a" timestamp fc0 fc1 fraction)
-         fraction)))))
+       (coerce (/ s0 delta) 'double-float))))) 
 
 (declaim (inline grib-get-uv))
 (defun grib-get-uv (uv index)
@@ -222,10 +222,9 @@
 
 (defun interpolation-parameters (timestamp &optional (cycle nil))
   (multiple-value-bind  (date1 cycle1)
-      (available-cycle timestamp)
-    (when cycle
-      (multiple-value-setq (date1 cycle1)
-        (timestamp-to-timespec (parse-timestring cycle))))
+    (if cycle
+        (timestamp-to-timespec (parse-timestring cycle))
+        (available-cycle timestamp))
     (multiple-value-bind (date0 cycle0)
         (previous-cycle date1 cycle1)
       (let* ((current (prediction-parameters timestamp :date date1 :cycle cycle1))

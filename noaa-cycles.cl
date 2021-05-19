@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-03-21 03:37:33>
+;;; Last Modified <michael 2021-05-01 23:57:01>
 
 (in-package "CL-WEATHER")
 
@@ -28,6 +28,7 @@
                                                   (timespec-to-timestamp date cycle)) 60))
          (forecast (cycle-forecast date cycle timestamp))
          (available (> elapsed (+ 210 (truncate forecast 3)))))
+    (log2:trace "Timestamp: ~a => ~a ~a ~a" timestamp available date cycle)
     (if available
         (values date cycle)
         (previous-cycle date cycle))))
