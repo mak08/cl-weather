@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2021-04-25 22:28:05>
+;;; Last Modified <michael 2021-05-23 18:33:51>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
@@ -23,7 +23,6 @@
            "CURRENT-CYCLE"
            "CYCLE-UPDATING-P"
            "PREVIOUS-CYCLE"
-           "DOWNLOAD-CYCLE-BACKTRACK"
            "DOWNLOAD-LATEST-CYCLE"
            "DOWNLOAD-CYCLE"
            "DATASET-BASETIME"

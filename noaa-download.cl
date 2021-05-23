@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-03-22 23:45:44>
+;;; Last Modified <michael 2021-05-23 18:33:39>
 
 (in-package "CL-WEATHER")
 
@@ -49,35 +49,6 @@
 
 (defparameter *connect-timeout* "10")
 (defparameter *retry-interval* 30)
-
-(defun download-cycle-backtrack (&optional (start (now)))
-  ;; Retry to download starting with the latest available cycle
-  ;; going backward in time if necessary.
-  ;; Return list of filenames
-  (let ((timepoint start))
-    (tagbody
-      :start
-      (multiple-value-bind (date cycle cycle-start-time)
-          (latest-complete-cycle timepoint)
-        (log2:info "Trying download: ~a-~a" date cycle)
-        (let* ((count
-                (download-cycle date cycle :if-missing :abort)))
-          (cond
-            ((< count (length +noaa-forecast-offsets+))
-             ;; Move one cycle back in time
-             (log2:info "Found ~a files (incomplete) - backing up" count)
-             (setf timepoint
-                   (adjust-timestamp timepoint (offset :minute (- 360))))
-             (let ((delta (truncate (timestamp-difference start timepoint) 3600)))
-               (log2:info "Looking back ~ah" delta)
-               (if (< delta 48)
-                   (go :start)
-                   (error "Incomplete downloads"))))
-            (t
-             (return-from download-cycle-backtrack
-               (values date
-                       cycle
-                       cycle-start-time)))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; DOWNLOAD-CURRENT-CYCLE
