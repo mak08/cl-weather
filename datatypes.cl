@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2021-05-02 00:31:21>
+;;; Last Modified <michael 2021-05-27 22:05:57>
 
 (in-package :cl-weather)
 
@@ -16,10 +16,29 @@
 ;;;   dataset is shifted before the update phase.
 
 ;;; TODO: Use struct CYCLE throughout to specify the forecast cycle
-(defstruct cycle
-  :date                                 ; Format: YYYYMMDD
-  :hour                                 ; 0, 6, 12, 18 (for NOAA)
-  )
+(defstruct (cycle (:constructor make-cycle%)) timestamp)
+
+(defun make-cycle (&key (timestamp (now)))
+  (let* ((seconds (timestamp-to-unix timestamp))
+         (cycle-seconds (* 6 3600 (floor seconds (* 6 3600)))))
+    (make-cycle% :timestamp (unix-to-timestamp cycle-seconds))))
+
+(defun-t cycle-datestring string ((cycle cycle))
+  (format-timestring nil (cycle-timestamp cycle)
+                     :format '((:year 4) (:month 2) (:day 2))
+                     :timezone +utc-zone+))
+
+(defun-t cycle-as-timestamp timestamp ((cycle cycle))
+  (cycle-timestamp cycle))
+
+(defun-t cycle-run fixnum ((cycle cycle))
+  (timestamp-hour (cycle-timestamp cycle) :timezone +utc-zone+))
+
+(defmethod print-object ((thing cycle) stream)
+  (format stream "[~a ~a]" (cycle-datestring thing) (cycle-run thing))) 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
 
 (defstruct dataset
   basetime                              ; Base time of forecast data
@@ -28,7 +47,7 @@
   )
 
 (defun dataset-cycle (dataset)
-  (dataset-basetime dataset))
+  (make-cycle :timestamp (dataset-basetime dataset)))
 
 (defmethod print-object ((thing dataset) stream)
   (format stream "{dataset base=~a}"
@@ -71,8 +90,8 @@
     (format stream "{Forecast @ ~a, Offset ~a, Cycle ~a|~a}"
             (format-datetime nil (fc-time thing))
             (fc-offset thing)
-            (format-timestring nil cycle :format '(:year "-" (:month 2) "-" (:day 2)) :timezone +utc-zone+)
-            (timestamp-hour cycle :timezone +utc-zone+))))
+            (cycle-datestring cycle)
+            (cycle-run cycle))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Forecast data
@@ -170,22 +189,6 @@
     (values u v)))
 (declaim (notinline grib-get-uv))
 
-(defun timespec-to-timestamp (date cycle)
-  "Make a timestamp from $date=YYYYMMDD, $cycle={0,6,12,18}"
-  (parse-timestring (format nil "~a-~a-~aT~2,,,'0@a:00:00"
-                            (subseq date 0 4)
-                            (subseq date 4 6)
-                            (subseq date 6 8)
-                            cycle)))
-
-(defun timestamp-to-timespec (timestamp)
-  (let ((date (format-timestring nil timestamp :format '((:year 4) (:month 2) (:day 2))))
-        (cycle (timestamp-hour timestamp :timezone +utc-zone+)))
-    (ecase cycle
-      ((0 6 12 18)
-       (values date
-               cycle)))))
-
 (defmethod print-object ((ts timestamp) stream)
   (format-datetime stream ts))
 
@@ -193,54 +196,45 @@
 (defun base-time (iparams)
   (params-base-time (iparams-current iparams)))
 
-(defun prediction-parameters (timestamp &key (date nil) (cycle nil))
+(defun prediction-parameters (timestamp &key (cycle (available-cycle timestamp)))
   ;; If $date is provided, $cycle must also be provided, and the specified forecast will be used.
   ;; Otherwise, the latest available forecast will be used.
   ;; ### ToDo ### The $next-fc may not be available yet!
-  (cond
-    (date
-     (assert cycle))
-    (t
-     (multiple-value-setq (date cycle) (available-cycle timestamp))))
-  (log2:trace "TS: ~a, date:~a cycle:~a" timestamp date cycle)
-  (let* ((forecast (cycle-forecast date cycle timestamp))
+  (log2:trace "timestamp:~a cycle:~a" timestamp cycle)
+  (let* ((forecast (cycle-forecast cycle timestamp))
          (next-fc (next-forecast forecast))
-         (ds0 (noaa-forecast date :cycle cycle :offset forecast))
-         (ds1 (noaa-forecast date :cycle cycle :offset next-fc))
+         (ds0 (noaa-forecast :cycle cycle :offset forecast))
+         (ds1 (noaa-forecast :cycle cycle :offset next-fc))
          (fc0 (dataset-forecast ds0))
          (fc1 (dataset-forecast ds1))
          (fraction (forecast-fraction fc0 fc1 timestamp))
          (info (dataset-grib-info ds0)))
     (make-params :info info
                  :timestamp timestamp
-                 :base-time (timespec-to-timestamp date cycle)
+                 :base-time (cycle-timestamp cycle)
                  :forecast forecast
                  :next-fc next-fc
                  :fc0 fc0
                  :fc1 fc1
                  :fraction fraction)))
 
-(defun interpolation-parameters (timestamp &optional (cycle nil))
-  (multiple-value-bind  (date1 cycle1)
-    (if cycle
-        (timestamp-to-timespec (parse-timestring cycle))
-        (available-cycle timestamp))
-    (multiple-value-bind (date0 cycle0)
-        (previous-cycle date1 cycle1)
-      (let* ((current (prediction-parameters timestamp :date date1 :cycle cycle1))
-             (c-offset (/ (timestamp-difference (params-timestamp current)
-                                                (params-base-time current))
-                         3600.0))
-             (previous (when  (<= c-offset (+ *merge-start* *merge-window*))
-                         (prediction-parameters timestamp :date date0 :cycle cycle0)))
-             (p-offset (when  (<= c-offset (+ *merge-start* *merge-window*))
-                         (/ (timestamp-difference (params-timestamp previous)
-                                                  (params-base-time previous))
-                            3600.0))))
-        (log2:trace "Current: ~a-~a+~a  previous: ~a" date1 cycle1 (truncate (* c-offset 60)) (not (null previous)))
-        (make-iparams :current current
-                      :previous previous
-                      :offset c-offset)))))
+(defun interpolation-parameters (timestamp &optional (cycle  (available-cycle timestamp)))
+  (let* ((cycle1 cycle)
+         (cycle0 (previous-cycle cycle))
+         (current (prediction-parameters timestamp :cycle cycle1))
+         (c-offset (/ (timestamp-difference (params-timestamp current)
+                                            (params-base-time current))
+                      3600.0))
+         (previous (when  (<= c-offset (+ *merge-start* *merge-window*))
+                     (prediction-parameters timestamp :cycle cycle0)))
+         (p-offset (when  (<= c-offset (+ *merge-start* *merge-window*))
+                     (/ (timestamp-difference (params-timestamp previous)
+                                              (params-base-time previous))
+                        3600.0))))
+    (log2:trace "Current:~a  Previous: ~a" cycle1 cycle0)
+    (make-iparams :current current
+                  :previous previous
+                  :offset c-offset)))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

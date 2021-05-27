@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2019-07-12 22:26:11>
+;;; Last Modified <michael 2021-05-25 21:34:56>
 
 (in-package :cl-weather)
 
@@ -9,8 +9,9 @@
          #+()(ftype (function (double-float double-float) double-float)
             enorm-d))
 
-(defun test-forecast-fraction (&key (timestamp (now)) (date) (cycle))
-  (let* ((forecast (cycle-forecast date cycle timestamp))
+(defun test-forecast-fraction (&key (timestamp (now)) (cycle))
+  (let* ((forecast (cycle-forecast cycle timestamp))
+         (date)
          (ds0 (noaa-forecast date :cycle cycle :offset forecast))
          (ds1 (noaa-forecast date :cycle cycle :offset (next-forecast forecast)))
          (fc0 (dataset-forecast ds0))

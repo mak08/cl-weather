@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-05-23 20:42:27>
+;;; Last Modified <michael 2021-05-28 00:01:24>
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -20,9 +20,7 @@
 (defun noaa-start-updates (&key (max-offset 384))
   (download-latest-cycle :max-offset max-offset)
   (when (cycle-updating-p)
-    (multiple-value-bind (date cycle)
-                                (current-cycle)
-      (download-cycle date cycle :max-offset max-offset :if-missing :wait)))
+    (download-cycle (current-cycle) :max-offset max-offset :if-missing :wait))
   (setf *forecast-cleanup-timer*
         (timers:add-timer #'noaa-forecast-ht-cleanup
                           :id "FORECAST-CLEANUP"
@@ -30,9 +28,7 @@
                           :minutes '(0)))
   (setf *update-timer*
         (timers:add-timer (lambda ()
-                            (multiple-value-bind (date cycle)
-                                (current-cycle)
-                              (download-cycle date cycle :max-offset max-offset :if-missing :wait)))
+                            (download-cycle (current-cycle) :max-offset max-offset :if-missing :wait))
                           :id "WEATHER-UPDATER"
                           :hours '(3 9 15 21)
                           :minutes '(30))))

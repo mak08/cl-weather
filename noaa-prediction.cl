@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2021-04-25 22:30:37>
+;;; Last Modified <michael 2021-05-27 21:59:23>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -29,8 +29,8 @@
         (params-old (iparams-previous iparams)))
     (vr-prediction% lat lng params-new  offset-new params-old)))
 
-(defun vr-prediction (lat lng  &key (timestamp (now)) (date) (cycle))
-  (let* ((params (prediction-parameters timestamp :date date :cycle cycle)))
+(defun vr-prediction (lat lng  &key (timestamp (now)) (cycle (make-cycle :timestamp timestamp)))
+  (let* ((params (prediction-parameters timestamp :cycle cycle)))
     (vr-prediction% lat lng params nil)))
 
 (defun vr-prediction% (lat lng current offset-new &optional previous)

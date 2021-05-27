@@ -1,17 +1,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-05-23 18:09:47>
+;;; Last Modified <michael 2021-05-27 00:19:58>
 
 (in-package "CL-WEATHER")
 
 (defun current-cycle ()
   ;; The next cycle becomes available (gradually) starting about 3:30h
   ;; after the forecast computation starts.
-  (let* ((avail-time (adjust-timestamp (now) (offset :minute (- 210))))
-         (date (format-timestring nil avail-time :format '((:year 4) (:month 2) (:day 2)) :timezone +utc-zone+))
-         (cycle (* 6 (truncate (timestamp-hour avail-time :timezone +utc-zone+) 6))))
-    (values date cycle)))
+  (make-cycle :timestamp (adjust-timestamp (now) (offset :minute (- 210)))))
 
 (defun available-cycle (timestamp)
   ;; If $timestamp is in the future:
@@ -22,32 +19,23 @@
          (diff (timestamp-difference timestamp now))
          (avail-time (adjust-timestamp (if (< diff 0) timestamp now)
                        (offset :minute (- 210))))
-         (date (format-timestring nil avail-time :format '((:year 4) (:month 2) (:day 2)) :timezone +utc-zone+))
-         (cycle (* 6 (truncate (timestamp-hour avail-time :timezone +utc-zone+) 6)))
+         (cycle (make-cycle :timestamp avail-time))
          (elapsed (truncate (timestamp-difference (now)
-                                                  (timespec-to-timestamp date cycle)) 60))
-         (forecast (cycle-forecast date cycle timestamp))
+                                                  (cycle-timestamp cycle)) 60))
+         (forecast (cycle-forecast cycle timestamp))
          (available (> elapsed (+ 225 (truncate forecast 3)))))
-    (log2:trace "Timestamp: ~a => ~a ~a ~a" timestamp available date cycle)
+    (log2:trace "Timestamp: ~a => ~a ~a" timestamp available cycle)
     (if available
-        (values date cycle)
-        (previous-cycle date cycle))))
+        (values cycle)
+        (previous-cycle cycle))))
 
-(defun previous-cycle (date cycle)
-  (let ((timestamp (timespec-to-timestamp  date cycle)))
-    (timestamp-to-timespec (adjust-timestamp timestamp (offset :hour -6)))))
+(defun previous-cycle (cycle)
+  (let ((timestamp (cycle-timestamp cycle)))
+    (make-cycle :timestamp (adjust-timestamp timestamp (offset :hour -6)))))
 
 (defun latest-complete-cycle (&optional (time (now)))
   ;; Determine the latest cycle that should'be complete (theoretically) at the given time
-  (let* ((cycle-start-time 
-          (timestamp-minimize-part (adjust-timestamp time (offset :minute (- 300)))
-                                   :min
-                                   :timezone +utc-zone+))
-         (date (format-timestring nil cycle-start-time :format '((:year 4) (:month 2) (:day 2))))
-         (cycle (* 6 (truncate (timestamp-hour cycle-start-time :timezone +utc-zone+) 6))))
-    (values date
-            cycle
-            (timespec-to-timestamp date cycle))))
+  (make-cycle :timestamp (adjust-timestamp time (offset :minute (- 300)))))
 
 (defun cycle-updating-p (&optional (time (now)))
   (< 210 (mod (day-minute time) 360) 300))
@@ -79,19 +67,18 @@
     357 360 363 366 369 372 375 378 381 384))
 
 ;; Return the 3-hour-forecast required for $timestamp when using $cycle
-(defun cycle-forecast (date cycle timestamp)
-  (ecase cycle ((0 6 12 18)))
-  (let* ((basetime (timespec-to-timestamp date cycle)) 
+(defun cycle-forecast (cycle timestamp)
+  (let* ((basetime (cycle-as-timestamp cycle)) 
          (difference (truncate
                       (timestamp-difference timestamp basetime)
                       3600)))
     (cond
       ((minusp difference)
-       (error "~a is in the past of ~a-~a" timestamp date cycle))
+       (error "~a is in the past of cycle ~a" timestamp cycle))
       ((<= difference 384)
        (* 3 (truncate difference 3)))
       (t
-       (log2:warning "~a is in the future of cycle ~a-~a" timestamp date cycle)
+       (log2:warning "~a is in the future of cycle ~a" timestamp cycle)
        384))))
 
 ;; Return the next 3-hour-forecast

@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-04-25 22:29:47>
+;;; Last Modified <michael 2021-05-25 21:09:04>
 
 (in-package "CL-WEATHER")
 (setf (log2:log-level "cl-weather") log2:+info+)
@@ -17,6 +17,16 @@
 
 (defvar *grib-directory*
   (merge-pathnames (make-pathname :directory '(:relative "gribfiles")) *source-root*))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Forecast hashtable
+
+(defvar +noaa-forecast-ht-lock+
+  (bordeaux-threads:make-lock "noaa-forecast-ht"))
+
+(defvar *noaa-forecast-ht*
+  (make-hash-table :test #'equalp))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Merge new and old if we are between 4-6.5h into the new forecast
