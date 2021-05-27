@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2021-05-26 21:14:42>
+;;; Last Modified <michael 2021-05-28 01:40:04>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
@@ -33,8 +33,8 @@
            "CYCLE"
            "CYCLE-TIMESTAMP"
            "MAKE-CYCLE"
-           "CYCLE-DATE"
-           "CYCLE-HOUR"
+           "CYCLE-DATESTRING"
+           "CYCLE-RUN"
            "PREDICTION-PARAMETERS"
            "PARAMS-BASE-TIME"
            "PARAMS-TIMESTAMP"

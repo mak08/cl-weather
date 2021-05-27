@@ -1,13 +1,15 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Access to NOAA forecasts (non-interpolated)
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-05-27 22:04:22>
+;;; Last Modified <michael 2021-05-28 01:39:13>
 
 (in-package "CL-WEATHER")
 
 (defun noaa-forecast (&key (cycle 0) (offset 0))
   "Read GRIB data into U and V arrays. Assumes the GRIB file contains U-GRD and V-GRD values"
-  (let ((key (list cycle offset)))
+  (let ((key (list (cycle-datestring cycle)
+                   (cycle-run cycle)
+                   offset)))
     (bordeaux-threads:with-lock-held (+noaa-forecast-ht-lock+)
       (or (gethash key *noaa-forecast-ht*)
           (setf (gethash key *noaa-forecast-ht*)
