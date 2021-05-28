@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2021-05-27 22:05:57>
+;;; Last Modified <michael 2021-05-28 19:04:21>
 
 (in-package :cl-weather)
 
@@ -33,6 +33,14 @@
 
 (defun-t cycle-run fixnum ((cycle cycle))
   (timestamp-hour (cycle-timestamp cycle) :timezone +utc-zone+))
+
+(defun datestring-run-to-timestamp (datestring run)
+  (let ((date (format nil "~a-~a-~aT~2,,,'0@a:00:00.000Z"
+                      (subseq datestring 0 4)
+                      (subseq datestring 4 6)
+                      (subseq datestring 6 8)
+                      run)))
+    date))
 
 (defmethod print-object ((thing cycle) stream)
   (format stream "[~a ~a]" (cycle-datestring thing) (cycle-run thing))) 
