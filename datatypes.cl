@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2021-05-28 19:04:21>
+;;; Last Modified <michael 2021-07-04 01:02:24>
 
 (in-package :cl-weather)
 
@@ -226,9 +226,9 @@
                  :fc1 fc1
                  :fraction fraction)))
 
-(defun interpolation-parameters (timestamp &optional (cycle  (available-cycle timestamp)))
-  (let* ((cycle1 cycle)
-         (cycle0 (previous-cycle cycle))
+(defun interpolation-parameters (timestamp &optional (cycle (available-cycle timestamp)))
+  (let* ((cycle1 (or cycle (available-cycle timestamp)))
+         (cycle0 (previous-cycle cycle1))
          (current (prediction-parameters timestamp :cycle cycle1))
          (c-offset (/ (timestamp-difference (params-timestamp current)
                                             (params-base-time current))
