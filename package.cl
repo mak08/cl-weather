@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2021-05-28 01:40:04>
+;;; Last Modified <michael 2021-07-04 19:02:08>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
@@ -43,7 +43,8 @@
            "MAKE-IPARAMS"
            "IPARAMS-CURRENT"
            "BASE-TIME"
-
+           "IPARAMS-EFFECTIVE-CYCLE"
+           
            "TIMESPEC-TO-TIMESTAMP"
            "TIMESTAMP-TO-TIMESPEC"
            

@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2021-07-04 01:02:24>
+;;; Last Modified <michael 2021-07-04 18:59:54>
 
 (in-package :cl-weather)
 
@@ -204,6 +204,11 @@
 (defun base-time (iparams)
   (params-base-time (iparams-current iparams)))
 
+(defun iparams-effective-cycle (iparams)
+  (if (iparams-previous iparams)
+      (params-base-time (iparams-previous iparams))
+      (params-base-time (iparams-current iparams))))
+
 (defun prediction-parameters (timestamp &key (cycle (available-cycle timestamp)))
   ;; If $date is provided, $cycle must also be provided, and the specified forecast will be used.
   ;; Otherwise, the latest available forecast will be used.
@@ -230,19 +235,15 @@
   (let* ((cycle1 (or cycle (available-cycle timestamp)))
          (cycle0 (previous-cycle cycle1))
          (current (prediction-parameters timestamp :cycle cycle1))
-         (c-offset (/ (timestamp-difference (params-timestamp current)
-                                            (params-base-time current))
-                      3600.0))
-         (previous (when  (<= c-offset (+ *merge-start* *merge-window*))
-                     (prediction-parameters timestamp :cycle cycle0)))
-         (p-offset (when  (<= c-offset (+ *merge-start* *merge-window*))
-                     (/ (timestamp-difference (params-timestamp previous)
-                                              (params-base-time previous))
-                        3600.0))))
+         (offset (/ (timestamp-difference (params-timestamp current)
+                                          (params-base-time current))
+                    3600.0))
+         (previous (when  (<= offset (+ *merge-start* *merge-window*))
+                     (prediction-parameters timestamp :cycle cycle0))))
     (log2:trace "Current:~a  Previous: ~a" cycle1 cycle0)
     (make-iparams :current current
                   :previous previous
-                  :offset c-offset)))
+                  :offset offset)))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
