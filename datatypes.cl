@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2021-07-04 18:59:54>
+;;; Last Modified <michael 2021-07-31 18:04:13>
 
 (in-package :cl-weather)
 
@@ -63,7 +63,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Forecast parameters
-(defstruct params timestamp base-time forecast next-fc info fc0 fc1 fraction)
+(defstruct params timestamp base-time forecast next-fc method merge-start merge-window info fc0 fc1 fraction)
 
 (defstruct iparams current previous offset)
 
@@ -209,7 +209,11 @@
       (params-base-time (iparams-previous iparams))
       (params-base-time (iparams-current iparams))))
 
-(defun prediction-parameters (timestamp &key (cycle (available-cycle timestamp)))
+(defun prediction-parameters (timestamp &key
+                                          (method)
+                                          (merge-start *merge-start*)
+                                          (merge-window *merge-window*)
+                                          (cycle (available-cycle timestamp)))
   ;; If $date is provided, $cycle must also be provided, and the specified forecast will be used.
   ;; Otherwise, the latest available forecast will be used.
   ;; ### ToDo ### The $next-fc may not be available yet!
@@ -225,21 +229,36 @@
     (make-params :info info
                  :timestamp timestamp
                  :base-time (cycle-timestamp cycle)
+                 :method method
+                 :merge-start merge-start
+                 :merge-window merge-window
                  :forecast forecast
                  :next-fc next-fc
                  :fc0 fc0
                  :fc1 fc1
                  :fraction fraction)))
 
-(defun interpolation-parameters (timestamp &optional (cycle (available-cycle timestamp)))
+(defun interpolation-parameters (timestamp &key
+                                             (method :vr)
+                                             (merge-start *merge-start*)
+                                             (merge-window *merge-window*)
+                                             (cycle (available-cycle timestamp)))
   (let* ((cycle1 (or cycle (available-cycle timestamp)))
          (cycle0 (previous-cycle cycle1))
-         (current (prediction-parameters timestamp :cycle cycle1))
+         (current (prediction-parameters timestamp
+                                         :method method
+                                         :merge-start merge-start
+                                         :merge-window merge-window
+                                         :cycle cycle1))
          (offset (/ (timestamp-difference (params-timestamp current)
                                           (params-base-time current))
                     3600.0))
          (previous (when  (<= offset (+ *merge-start* *merge-window*))
-                     (prediction-parameters timestamp :cycle cycle0))))
+                     (prediction-parameters timestamp
+                                            :method method
+                                            :merge-start merge-start
+                                            :merge-window merge-window
+                                            :cycle cycle0))))
     (log2:trace "Current:~a  Previous: ~a" cycle1 cycle0)
     (make-iparams :current current
                   :previous previous

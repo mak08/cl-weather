@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2021-05-27 21:59:23>
+;;; Last Modified <michael 2021-07-31 14:42:15>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -35,8 +35,8 @@
 
 (defun vr-prediction% (lat lng current offset-new &optional previous)
   (declare (inline normalized-lat normalized-lng uv-index time-interpolate angle bilinear enorm))
-  (let* (
-         (info (params-info current))
+  (let* ((info (params-info current))
+         (method (params-method current))
          (i-inc (gribinfo-i-inc info))
          (j-inc (gribinfo-j-inc info))
          (lat0 (normalized-lat (* (ffloor lat j-inc) j-inc)))
@@ -45,7 +45,7 @@
          (wlng (/ (- (normalized-lng lng) lng0) i-inc)))
     (multiple-value-bind (u00 u01 u10 u11 v00 v01 v10 v11 a00 a01 a10 a11 s00 s01 s10 s11)
         (time-interpolate lat lng info current offset-new previous)
-      (position-interpolate wlat wlng s00 s01 s10 s11 a00 a01 a10 a11 u00 u01 u10 u11 v00 v01 v10 v11))))
+      (position-interpolate method wlat wlng s00 s01 s10 s11 a00 a01 a10 a11 u00 u01 u10 u11 v00 v01 v10 v11))))
 
 (defun time-interpolate (lat lng info current offset-new previous)
   (declare (inline grib-get-uv))
@@ -72,8 +72,8 @@
   (let* ((fraction (params-fraction current))
          (f0c1 (params-fc0 current))
          (f1c1 (params-fc1 current))
-         (merge-start *merge-start*)
-         (merge-window *merge-window*))
+         (merge-start (params-merge-start current))
+         (merge-window (params-merge-window current)))
     (cond
       ((and previous
             (< offset merge-start))
@@ -111,10 +111,10 @@
                (v (linear fraction v0 v1)))
            (values u v)))))))
 
-(defun position-interpolate (wlat wlng s00 s01 s10 s11 a00 a01 a10 a11 u00 u01 u10 u11 v00 v01 v10 v11)
+(defun position-interpolate (method wlat wlng s00 s01 s10 s11 a00 a01 a10 a11 u00 u01 u10 u11 v00 v01 v10 v11)
   (let* ((wind-u (bilinear wlat wlng u00 u01 u10 u11))
          (wind-v (bilinear wlat wlng v00 v01 v10 v11)))
-    (ecase *interpolation*
+    (ecase method
       (:enorm
        (values (angle wind-u wind-v)
                (enorm wind-u wind-v)))
