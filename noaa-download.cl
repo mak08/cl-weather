@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-05-27 21:38:08>
+;;; Last Modified <michael 2021-10-11 22:13:50>
 
 (in-package "CL-WEATHER")
 
@@ -216,12 +216,20 @@
 ;;; Download by range query
 (defvar *grib-index-ht* (make-hash-table :test #'equalp))
 
+(defvar +grib-index-ht-lock+
+  (bordeaux-threads:make-lock "grib-index-ht"))
+
+(defun cached-grib-index (key value)
+  (bordeaux-threads:with-lock-held (+grib-index-ht-lock+)
+    (or (gethash key *grib-index-ht*)
+        (setf (gethash key *grib-index-ht*)
+              value))))
+
 (defun grib2-download-file-u-v-10 (cycle offset &key (resolution "1p00"))
   (let* ((destpath (noaa-destpath :cycle cycle :offset offset))
          (spec (format nil "~a~a" cycle offset))
-         (index (or (gethash spec *grib-index-ht*)
-                    (setf (gethash spec *grib-index-ht*)
-                          (grib2-get-index cycle offset :resolution resolution)))))
+         (index (cached-grib-index spec
+                                   (grib2-get-index cycle offset :resolution resolution))))
     (log2:info "Downloading ~a-~a to ~a" cycle offset destpath)
     (multiple-value-bind (start end)
         (grib2-get-u-v-10-range index)
