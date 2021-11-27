@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2021-07-31 14:42:15>
+;;; Last Modified <michael 2021-11-27 12:52:56>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -122,42 +122,44 @@
        (values (angle wind-u wind-v)
                (bilinear wlat wlng s00 s01 s10 s11)))
       (:vr
-       (flet ((avg4 (x1 x2 x3 x4)
-                (/ (+ x1 x2 x3 x4) 4))
-              (scoeff (a0 a1)
-                (abs (sin (- a0 a1)))))
-         (let* ((avg-enorm (enorm (avg4 u00 u01 u10 u11) (avg4 v00 v01 v10 v11)))
-                (speed-bilinear (bilinear wlat wlng s00 s01 s10 s11))
-                (speed-enorm (enorm wind-u wind-v))
-                (speed-avg (avg4 s00 s10 s01 s11))
-                (speed-ratio (if (> speed-avg 0) (/ avg-enorm speed-avg) 1d0)))
-           (multiple-value-bind (c10 c11 c00 c01)
-               (cond ((< wlng 0.5d0)
-                      (cond ((< wlat 0.5d0)
-                             ;; left top
-                             (values (scoeff a10 a00) speed-ratio 1d0 (scoeff a00 a01)))
-                            (t
-                             ;; left bottom
-                             (decf wlat 0.5d0)
-                             (values 1d0 (scoeff a10 a11) (scoeff a10 a00) speed-ratio))))
-                     (t
-                      (decf wlng 0.5d0)
-                      (cond ((< wlat 0.5d0)
-                             ;; right top
-                             (values speed-ratio (scoeff a11 a01) (scoeff a00 a01) 1d0))
-                            (t
-                             ;; right bottom
-                             (decf wlat 0.5d0)
-                             (values (scoeff a10 a11) 1d0 speed-ratio (scoeff a11 a01))))))
-             (let* ((factor (if (> speed-bilinear 0)
-                                (expt (/ speed-enorm speed-bilinear)
-                                      (- 1d0 (expt (bilinear (* wlat 2d0) (* wlng 2d0) c00 c01 c10 c11)
-                                                   0.7d0)))
-                                1))
-                    (speed (* speed-bilinear factor)))
-               (log2:trace "speed-bilinear=~a speed=~a" speed-bilinear speed)
-               (values (angle wind-u wind-v)
-                       speed)))))))))
+       (values (angle wind-u wind-v)
+               (*
+                (bilinear wlat wlng s00 s01 s10 s11)
+                (magnitude-factor wlat wlng wind-u wind-v s00 s01 s10 s11 a00 a01 a10 a11 u00 u01 u10 u11 v00 v01 v10 v11)))))))
 
+(declaim (inline magnitude-factor))
+(defun magnitude-factor (wlat wlng wind-u wind-v s00 s01 s10 s11 a00 a01 a10 a11 u00 u01 u10 u11 v00 v01 v10 v11)
+  (flet ((avg4 (x1 x2 x3 x4)
+           (/ (+ x1 x2 x3 x4) 4))
+         (scoeff (a0 a1)
+           (abs (sin (- a0 a1)))))
+    (let* ((avg-enorm (enorm (avg4 u00 u01 u10 u11) (avg4 v00 v01 v10 v11)))
+           (speed-bilinear (bilinear wlat wlng s00 s01 s10 s11))
+           (speed-enorm (enorm wind-u wind-v))
+           (speed-avg (avg4 s00 s10 s01 s11))
+           (speed-ratio (if (> speed-avg 0) (/ avg-enorm speed-avg) 1d0)))
+      (multiple-value-bind (c10 c11 c00 c01)
+          (cond ((< wlng 0.5d0)
+                 (cond ((< wlat 0.5d0)
+                        ;; left top
+                        (values (scoeff a10 a00) speed-ratio 1d0 (scoeff a00 a01)))
+                       (t
+                        ;; left bottom
+                        (decf wlat 0.5d0)
+                        (values 1d0 (scoeff a10 a11) (scoeff a10 a00) speed-ratio))))
+                (t
+                 (decf wlng 0.5d0)
+                 (cond ((< wlat 0.5d0)
+                        ;; right top
+                        (values speed-ratio (scoeff a11 a01) (scoeff a00 a01) 1d0))
+                       (t
+                        ;; right bottom
+                        (decf wlat 0.5d0)
+                        (values (scoeff a10 a11) 1d0 speed-ratio (scoeff a11 a01))))))
+        (if (> speed-bilinear 0)
+            (expt (/ speed-enorm speed-bilinear)
+                  (- 1d0 (expt (bilinear (* wlat 2d0) (* wlng 2d0) c00 c01 c10 c11)
+                               0.7d0)))
+            1)))))
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

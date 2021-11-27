@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-05-25 21:09:04>
+;;; Last Modified <michael 2021-11-01 20:33:26>
 
 (in-package "CL-WEATHER")
 (setf (log2:log-level "cl-weather") log2:+info+)
@@ -31,9 +31,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Merge new and old if we are between 4-6.5h into the new forecast
 ;; (0.5-3.0h of the cycle)
-
-(defvar *merge-window* 0.0d0)
-(defvar *merge-start* 6.0d0)
 
 (defvar *interpolation* :enorm)
 

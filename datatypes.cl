@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2021-07-31 18:04:13>
+;;; Last Modified <michael 2021-11-12 00:11:24>
 
 (in-package :cl-weather)
 
@@ -195,7 +195,7 @@
         (v (aref (uv-v-array uv) index)))
     ;;(log2:trace "~a => ~,2,,'0,f,~,2,,'0,f" index (angle u v) (enorm u v))
     (values u v)))
-(declaim (notinline grib-get-uv))
+;; (declaim (notinline grib-get-uv))
 
 (defmethod print-object ((ts timestamp) stream)
   (format-datetime stream ts))
@@ -210,9 +210,9 @@
       (params-base-time (iparams-current iparams))))
 
 (defun prediction-parameters (timestamp &key
-                                          (method)
-                                          (merge-start *merge-start*)
-                                          (merge-window *merge-window*)
+                                          method
+                                          merge-start
+                                          merge-window
                                           (cycle (available-cycle timestamp)))
   ;; If $date is provided, $cycle must also be provided, and the specified forecast will be used.
   ;; Otherwise, the latest available forecast will be used.
@@ -239,10 +239,11 @@
                  :fraction fraction)))
 
 (defun interpolation-parameters (timestamp &key
-                                             (method :vr)
-                                             (merge-start *merge-start*)
-                                             (merge-window *merge-window*)
+                                             method
+                                             merge-start
+                                             merge-window
                                              (cycle (available-cycle timestamp)))
+  (log2:trace "T:~a C:~a M:~a S:~a W:~a" timestamp cycle method merge-start merge-window)
   (let* ((cycle1 (or cycle (available-cycle timestamp)))
          (cycle0 (previous-cycle cycle1))
          (current (prediction-parameters timestamp
@@ -253,7 +254,7 @@
          (offset (/ (timestamp-difference (params-timestamp current)
                                           (params-base-time current))
                     3600.0))
-         (previous (when  (<= offset (+ *merge-start* *merge-window*))
+         (previous (when  (<= offset (+ merge-start merge-window))
                      (prediction-parameters timestamp
                                             :method method
                                             :merge-start merge-start
