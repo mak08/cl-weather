@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2021-11-27 12:52:56>
+;;; Last Modified <michael 2021-11-27 18:45:47>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -43,9 +43,9 @@
          (lng0 (normalized-lng (* (ffloor lng i-inc) i-inc)))
          (wlat (/ (- (normalized-lat lat) lat0) j-inc))
          (wlng (/ (- (normalized-lng lng) lng0) i-inc)))
-    (multiple-value-bind (u00 u01 u10 u11 v00 v01 v10 v11 a00 a01 a10 a11 s00 s01 s10 s11)
+    (multiple-value-bind (u00 u01 u10 u11 v00 v01 v10 v11)
         (time-interpolate lat lng info current offset-new previous)
-      (position-interpolate method wlat wlng s00 s01 s10 s11 a00 a01 a10 a11 u00 u01 u10 u11 v00 v01 v10 v11))))
+      (position-interpolate method wlat wlng u00 u01 u10 u11 v00 v01 v10 v11))))
 
 (defun time-interpolate (lat lng info current offset-new previous)
   (declare (inline grib-get-uv))
@@ -65,8 +65,7 @@
                     ((u11 v11) (time-interpolate-index i11 current offset-new previous)))
       (values u00 u01 u10 u11
               v00 v01 v10 v11
-              (angle u00 v00) (angle u01 v01) (angle u10 v10) (angle u11 v11)
-              (enorm u00 v00) (enorm u01 v01) (enorm u10 v10) (enorm u11 v11)))))
+))))
 
 (defun time-interpolate-index (index current offset previous)
   (let* ((fraction (params-fraction current))
@@ -111,9 +110,13 @@
                (v (linear fraction v0 v1)))
            (values u v)))))))
 
-(defun position-interpolate (method wlat wlng s00 s01 s10 s11 a00 a01 a10 a11 u00 u01 u10 u11 v00 v01 v10 v11)
+(defun position-interpolate (method wlat wlng u00 u01 u10 u11 v00 v01 v10 v11)
   (let* ((wind-u (bilinear wlat wlng u00 u01 u10 u11))
-         (wind-v (bilinear wlat wlng v00 v01 v10 v11)))
+         (wind-v (bilinear wlat wlng v00 v01 v10 v11))
+         (s00 (enorm u00 v00))
+         (s01 (enorm u01 v01))
+         (s10 (enorm u10 v10))
+         (s11 (enorm u11 v11)))
     (ecase method
       (:enorm
        (values (angle wind-u wind-v)
@@ -125,15 +128,19 @@
        (values (angle wind-u wind-v)
                (*
                 (bilinear wlat wlng s00 s01 s10 s11)
-                (magnitude-factor wlat wlng wind-u wind-v s00 s01 s10 s11 a00 a01 a10 a11 u00 u01 u10 u11 v00 v01 v10 v11)))))))
+                (magnitude-factor wlat wlng wind-u wind-v s00 s01 s10 s11 u00 u01 u10 u11 v00 v01 v10 v11)))))))
 
 (declaim (inline magnitude-factor))
-(defun magnitude-factor (wlat wlng wind-u wind-v s00 s01 s10 s11 a00 a01 a10 a11 u00 u01 u10 u11 v00 v01 v10 v11)
+(defun magnitude-factor (wlat wlng wind-u wind-v s00 s01 s10 s11 u00 u01 u10 u11 v00 v01 v10 v11)
   (flet ((avg4 (x1 x2 x3 x4)
            (/ (+ x1 x2 x3 x4) 4))
          (scoeff (a0 a1)
            (abs (sin (- a0 a1)))))
-    (let* ((avg-enorm (enorm (avg4 u00 u01 u10 u11) (avg4 v00 v01 v10 v11)))
+    (let* ((a00 (angle u00 v00))
+           (a01 (angle u01 v01))
+           (a10 (angle u10 v10))
+           (a11 (angle u11 v11))
+           (avg-enorm (enorm (avg4 u00 u01 u10 u11) (avg4 v00 v01 v10 v11)))
            (speed-bilinear (bilinear wlat wlng s00 s01 s10 s11))
            (speed-enorm (enorm wind-u wind-v))
            (speed-avg (avg4 s00 s10 s01 s11))
