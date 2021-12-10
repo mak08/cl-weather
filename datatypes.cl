@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2021-11-12 00:11:24>
+;;; Last Modified <michael 2021-12-09 22:42:36>
 
 (in-package :cl-weather)
 
@@ -62,10 +62,10 @@
           (format-datetime nil (dataset-basetime thing))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Forecast parameters
-(defstruct params timestamp base-time forecast next-fc method merge-start merge-window info fc0 fc1 fraction)
+;;; Interpolation parameters
 
 (defstruct iparams current previous offset)
+(defstruct params timestamp base-time forecast next-fc method merge-start merge-window info fc0 fc1 fraction)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; GRIB Info
@@ -213,15 +213,16 @@
                                           method
                                           merge-start
                                           merge-window
-                                          (cycle (available-cycle timestamp)))
+                                          (cycle (available-cycle timestamp))
+                                          (resolution "1p00"))
   ;; If $date is provided, $cycle must also be provided, and the specified forecast will be used.
   ;; Otherwise, the latest available forecast will be used.
   ;; ### ToDo ### The $next-fc may not be available yet!
   (log2:trace "timestamp:~a cycle:~a" timestamp cycle)
   (let* ((forecast (cycle-forecast cycle timestamp))
          (next-fc (next-forecast forecast))
-         (ds0 (noaa-forecast :cycle cycle :offset forecast))
-         (ds1 (noaa-forecast :cycle cycle :offset next-fc))
+         (ds0 (noaa-forecast :cycle cycle :offset forecast :resolution resolution))
+         (ds1 (noaa-forecast :cycle cycle :offset next-fc :resolution resolution))
          (fc0 (dataset-forecast ds0))
          (fc1 (dataset-forecast ds1))
          (fraction (forecast-fraction fc0 fc1 timestamp))
@@ -242,7 +243,8 @@
                                              method
                                              merge-start
                                              merge-window
-                                             (cycle (available-cycle timestamp)))
+                                             (cycle (available-cycle timestamp))
+                                             (resolution "1p00"))
   (log2:trace "T:~a C:~a M:~a S:~a W:~a" timestamp cycle method merge-start merge-window)
   (let* ((cycle1 (or cycle (available-cycle timestamp)))
          (cycle0 (previous-cycle cycle1))
@@ -250,7 +252,8 @@
                                          :method method
                                          :merge-start merge-start
                                          :merge-window merge-window
-                                         :cycle cycle1))
+                                         :cycle cycle1
+                                         :resolution resolution))
          (offset (/ (timestamp-difference (params-timestamp current)
                                           (params-base-time current))
                     3600.0))
@@ -259,7 +262,8 @@
                                             :method method
                                             :merge-start merge-start
                                             :merge-window merge-window
-                                            :cycle cycle0))))
+                                            :cycle cycle0
+                                            :resolution resolution))))
     (log2:trace "Current:~a  Previous: ~a" cycle1 cycle0)
     (make-iparams :current current
                   :previous previous

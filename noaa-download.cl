@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-10-11 22:13:50>
+;;; Last Modified <michael 2021-12-09 22:23:08>
 
 (in-package "CL-WEATHER")
 
@@ -40,8 +40,11 @@
 
 (defvar *use-range-query* t)
 ;; The FTP folder only works with range query, not with a filter URL
-(defparameter *noaa-gfs-path* "https://ftpprd.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a/atmos")
-;;              https://para.nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/para/
+
+(defparameter +ncep-ftpprd+ "https://ftpprd.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a/atmos")
+(defparameter +ncep-nomads+ "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a/atmos")
+(defparameter *noaa-gfs-path* +ncep-nomads+)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; DOWNLOAD-CYCLE
 ;;;    
@@ -55,17 +58,17 @@
 ;;;
 ;;;   Download current cycle
 
-(defun download-latest-cycle (&key (max-offset 384))
+(defun download-latest-cycle (&key (resolution "1p00") (max-offset 384))
   (let ((cycle
           (latest-complete-cycle)))
-    (download-cycle cycle :max-offset max-offset)))
+    (download-cycle cycle :resolution resolution :max-offset max-offset)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; DOWNLOAD-CYCLE
 ;;;
 ;;;   Download the specified cycle. If a forecast is (still) missing, wait or abort.
 
-(defun download-cycle (cycle &key (max-offset 384) (if-missing :wait))
+(defun download-cycle (cycle &key (resolution "1p00") (max-offset 384) (if-missing :wait))
   (ecase (cycle-run cycle) ((or 0 6 12 18)))
   (ecase if-missing ((or :wait :abort)))
   (log2:info "Downloading cycle ~a" cycle)
@@ -75,7 +78,7 @@
      :for offset :across +noaa-forecast-offsets+
      :while (<= offset max-offset)
      :do (let* ((destpath
-                 (noaa-destpath :cycle cycle :offset offset)))
+                 (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
            (cond
              ((probe-file destpath)
               (log2:info "File exists: ~a)" destpath))
@@ -86,7 +89,7 @@
                   (log2:error "Giving up download of ~a at offset ~a" cycle offset)
                   (error "Incomplete cycle ~a" cycle))
                 (cond
-                  ((not (noaa-file-exists-p cycle offset))
+                  ((not (noaa-file-exists-p cycle offset resolution))
                    (ecase if-missing
                      (:wait
                       (log2:info "Wait ~as for ~a-~a" *retry-interval* cycle offset)
@@ -95,26 +98,22 @@
                      (:abort
                       (return-from download-cycle (values count cycle)))))
                   (t
-                   (let ((spec
-                          (noaa-spec :cycle cycle :offset offset)))
-                     (multiple-value-bind
-                           (out error-out status)
-                         (handler-case 
-                             (download-noaa-file% cycle offset destpath)
-                           (uiop/run-program:subprocess-error (e)
-                             (log2:trace "curl error: ~a" e)
-                             (go :retry)))))))))))
+                   (handler-case 
+                       (download-noaa-file% cycle offset destpath :resolution resolution)
+                     (uiop/run-program:subprocess-error (e)
+                       (log2:trace "curl error: ~a" e)
+                       (go :retry)))))))))
      :finally (return (values count cycle))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Check if forecast exists on server
 
-(defun noaa-file-exists-p (cycle offset)
+(defun noaa-file-exists-p (cycle offset resolution)
   "Check if the specified forecast exists. $date='YYYYMMDD', $cycle='CC', $offset may be numeric or string."
   (let* ((fc-url
-          (noaa-file cycle offset))
+          (noaa-file cycle offset :resolution resolution))
          (idx-url
-          (noaa-index-file cycle offset))
+          (noaa-index-file cycle offset :resolution resolution))
          (check-fc
           (format () "curl -sfI --connect-timeout ~a ~a" *connect-timeout* fc-url))
          (check-idx
@@ -130,9 +129,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Download forecast
 
-(defun download-noaa-file (cycle offset &key (use-previous nil))
-  (let* ((spec (noaa-spec :cycle cycle :offset offset))
-         (destpath (noaa-destpath :cycle cycle :offset offset)))
+(defun download-noaa-file (cycle offset &key (resolution "1p00") (use-previous nil))
+  (let* ((spec (noaa-spec :cycle cycle :offset offset :resolution resolution))
+         (destpath (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
     (cond
       ((and (probe-file destpath)
             (noaa-file-complete-p destpath))
@@ -143,7 +142,8 @@
        (log2:trace "~a ~a" destpath cycle)
        (multiple-value-bind
              (out error-out status)
-           (download-noaa-file% cycle offset destpath)
+           (download-noaa-file% cycle offset destpath :resolution resolution)
+         (declare (ignore out error-out))
          (case status
            (0
             (let ((download-size
@@ -154,7 +154,7 @@
                  (log2:warning  "Deleting ~a (short file), trying previous." destpath)
                  (uiop:delete-file-if-exists destpath)
                  (return-from download-noaa-file
-                   (download-noaa-file (previous-cycle cycle) offset :use-previous nil)))
+                   (download-noaa-file (previous-cycle cycle) offset :resolution resolution :use-previous nil)))
                 ((< download-size 50000)
                  (log2:warning  "Deleting ~a (short file), giving up." destpath)
                  (uiop:delete-file-if-exists destpath)
@@ -191,8 +191,6 @@
   (let* ((spec (noaa-spec :cycle cycle :offset offset))
          (date (cycle-datestring cycle))
          (run (cycle-run cycle))
-         (dest-folder
-           *grib-directory*)
          (query
           (format nil "~a&~a&~a&~a&~a&~a&~a&~a&~a"
                   (format nil "file=~a" spec)
@@ -206,7 +204,7 @@
                   "bottomlat=-80"))
          (url
           (format nil
-                  "https://ftpprd.ncep.noaa.gov/cgi-bin/filter_gfs_~a.pl?~a" resolution query))
+                  "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_~a.pl?~a" resolution query))
          (ftp-command
           (format () "curl --connect-timeout ~a -n \"~a\" -o ~a" *connect-timeout* url destpath)))
     (log2:trace "~a" ftp-command)
@@ -226,15 +224,15 @@
               value))))
 
 (defun grib2-download-file-u-v-10 (cycle offset &key (resolution "1p00"))
-  (let* ((destpath (noaa-destpath :cycle cycle :offset offset))
-         (spec (format nil "~a~a" cycle offset))
+  (let* ((destpath (noaa-destpath :cycle cycle :offset offset :resolution resolution))
+         (spec (format nil "~a~a~a" cycle offset resolution))
          (index (cached-grib-index spec
                                    (grib2-get-index cycle offset :resolution resolution))))
     (log2:info "Downloading ~a-~a to ~a" cycle offset destpath)
     (multiple-value-bind (start end)
         (grib2-get-u-v-10-range index)
       (let* ((path
-              (noaa-file cycle offset))
+               (noaa-file cycle offset :resolution resolution))
              (url
               (format nil "~a -H \"Range: bytes=~a-~a\""
                       path
@@ -245,12 +243,8 @@
         (uiop:run-program command)))))
 
 (defun grib2-get-index (cycle offset &key (resolution "1p00"))
-  (let* ((date (cycle-datestring cycle))
-         (run (cycle-run cycle))
-         (url
-          (format nil
-                  "https://ftpprd.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a/atmos/gfs.t~2,,,'0@az.pgrb2.~a.f~3,,,'0@a.idx"
-                  date run run resolution offset))
+  (let* ((url
+           (noaa-index-file cycle offset :resolution resolution))
          (response
           (http-get url))
          (status-code
@@ -259,7 +253,7 @@
          (status-text
           (http-status-text
            (http-response-status response))))
-    (log2:trace "Retrieving index for ~a-~a" run offset)
+    (log2:trace "Retrieving index for ~a-~a-~a" cycle offset resolution)
     (cond
       ((= status-code 200)
        (http-response-body response))
@@ -300,6 +294,7 @@
       (with-output-to-string (err err-stream)
         (multiple-value-bind (out-status err-status program-status)
             (uiop:run-program ftp-command :output out :error-output err)
+          (declare (ignore out-status err-status))
           (case program-status
             (0
              (parse-http-response out-stream))
@@ -323,9 +318,8 @@
             (find-if (lambda (h) (string-equal (http-header-name h) "Content-Length"))
                      headers))))
          (buffer
-          (make-array content-length :element-type 'character))
-         (count
-          (read-sequence buffer f)))
+          (make-array content-length :element-type 'character)))
+      (read-sequence buffer f)
       (make-http-response :status status-line
                           :headers headers
                           :body buffer))))
@@ -360,21 +354,21 @@
           *noaa-gfs-path*
           (list (cycle-datestring cycle)
                 (cycle-run cycle))
-          (noaa-spec :cycle cycle :offset offset)))
+          (noaa-spec :cycle cycle :offset offset :basename basename :resolution resolution)))
 
 (defun noaa-index-file (cycle offset &key (basename "pgrb2") (resolution "1p00"))
   (format () "~?/~a.idx"
           *noaa-gfs-path*
           (list (cycle-datestring cycle)
                 (cycle-run cycle))
-          (noaa-spec :cycle cycle :offset offset)))
+          (noaa-spec :cycle cycle :offset offset :basename basename :resolution resolution)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Local forecast file name
 
 (defun noaa-destpath (&key (cycle 0) (offset 6) (basename "pgrb2") (resolution "1p00"))
   (let* ((spec
-           (noaa-spec :cycle cycle :offset offset  :basename "pgrb2" :resolution "1p00"))
+           (noaa-spec :cycle cycle :offset offset  :basename basename :resolution resolution))
          (destfile 
            (format () "~a_~a.grib2" (cycle-datestring cycle) spec)))
     (merge-pathnames destfile *grib-directory*)))

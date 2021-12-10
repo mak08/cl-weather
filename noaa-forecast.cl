@@ -1,22 +1,23 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Access to NOAA forecasts (non-interpolated)
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-05-28 19:11:12>
+;;; Last Modified <michael 2021-12-10 21:20:59>
 
 (in-package "CL-WEATHER")
 
-(defun noaa-forecast (&key (cycle 0) (offset 0))
+(defun noaa-forecast (&key (cycle 0) (offset 0) (resolution "1p00"))
   "Read GRIB data into U and V arrays. Assumes the GRIB file contains U-GRD and V-GRD values"
   (let ((key (list (cycle-datestring cycle)
                    (cycle-run cycle)
-                   offset)))
+                   offset
+                   resolution)))
     (bordeaux-threads:with-lock-held (+noaa-forecast-ht-lock+)
       (or (gethash key *noaa-forecast-ht*)
           (setf (gethash key *noaa-forecast-ht*)
-                (noaa-forecast% :cycle cycle :offset offset))))))
+                (noaa-forecast% :cycle cycle :offset offset :resolution resolution))))))
 
-(defun noaa-forecast% (&key (cycle 0) (offset 0) (load-missing nil))
-  (let ((filename (namestring (noaa-destpath :cycle cycle :offset offset)))
+(defun noaa-forecast% (&key (cycle 0) (offset 0) (resolution "1p00") (load-missing nil))
+  (let ((filename (namestring (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
         (index (codes-index-new '("step" "shortName"))))
     (when load-missing
       (setf filename
@@ -26,7 +27,7 @@
       (case retcode
         (0)
         (-11
-         (log2:warning "codes-index-add-file: -11")
+         (log2:warning "codes-index-add-file: ~a ~a" filename retcode)
          (error "File ~a not found" filename))
         (t
          (let ((message (codes-get-error-message retcode)))
@@ -46,7 +47,7 @@
            (log2:info "Checking ~a-~a-~a" datestring run offset)
            (let ((time (parse-timestring (datestring-run-to-timestamp datestring run))))
              (when (timestamp<= time expiry)
-               (log2:info "Removing ~a-~a-~a" datestring run offset)
+               (log2:info "Removing ~a" k)
                (remhash k cl-weather::*noaa-forecast-ht*)))))
        *noaa-forecast-ht*))))
   

@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2021-07-04 19:02:08>
+;;; Last Modified <michael 2021-12-04 22:48:09>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
@@ -12,9 +12,11 @@
         "CL-ECCODES"
         "LOCAL-TIME"
         "CL-MAP")
-  (:export "*GRIB-DIRECTORY*"
+  (:export "*NOAA-GFS-PATH*"
+           "+NCEP-NOMADS+"
+           "+NCEP-FTPPRD+"
+           "*GRIB-DIRECTORY*"
            "*USE-RANGE-QUERY*"
-           "*INTERPOLATION*"
            "*MERGE-START*"
            "*MERGE-WINDOW*"
            "NOAA-START-UPDATES"
