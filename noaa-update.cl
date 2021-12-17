@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-12-10 21:59:46>
+;;; Last Modified <michael 2021-12-17 16:34:54>
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -17,7 +17,7 @@
 (defvar *update-timer*)
 (defvar *forecast-cleanup-timer*)
 
-(defun noaa-start-updates (&key (resolution "1p00") (max-offset 384))
+(defun noaa-start-updates (&key (resolution '("1p00")) (max-offset 384))
   (download-latest-cycle :resolution resolution :max-offset max-offset)
   (when (cycle-updating-p)
     (download-cycle (current-cycle) :resolution resolution :max-offset max-offset :if-missing :wait))

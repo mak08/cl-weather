@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-12-09 22:23:08>
+;;; Last Modified <michael 2021-12-17 16:49:50>
 
 (in-package "CL-WEATHER")
 
@@ -58,7 +58,7 @@
 ;;;
 ;;;   Download current cycle
 
-(defun download-latest-cycle (&key (resolution "1p00") (max-offset 384))
+(defun download-latest-cycle (&key (resolution '("1p00")) (max-offset 384))
   (let ((cycle
           (latest-complete-cycle)))
     (download-cycle cycle :resolution resolution :max-offset max-offset)))
@@ -68,42 +68,48 @@
 ;;;
 ;;;   Download the specified cycle. If a forecast is (still) missing, wait or abort.
 
-(defun download-cycle (cycle &key (resolution "1p00") (max-offset 384) (if-missing :wait))
+(defun download-cycle (cycle &key (resolution '("1p00")) (max-offset 384) (if-missing :wait))
   (ecase (cycle-run cycle) ((or 0 6 12 18)))
   (ecase if-missing ((or :wait :abort)))
   (log2:info "Downloading cycle ~a" cycle)
   (loop
-     :with start-time = (now)
-     :for count :from 1
-     :for offset :across +noaa-forecast-offsets+
-     :while (<= offset max-offset)
-     :do (let* ((destpath
-                 (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
-           (cond
-             ((probe-file destpath)
-              (log2:info "File exists: ~a)" destpath))
-             (t
-              (tagbody
-                :retry
-                (when (> (timestamp-difference (now) start-time) (* 60 60 3))
-                  (log2:error "Giving up download of ~a at offset ~a" cycle offset)
-                  (error "Incomplete cycle ~a" cycle))
-                (cond
-                  ((not (noaa-file-exists-p cycle offset resolution))
-                   (ecase if-missing
-                     (:wait
-                      (log2:info "Wait ~as for ~a-~a" *retry-interval* cycle offset)
-                      (sleep *retry-interval*)
-                      (go :retry))
-                     (:abort
-                      (return-from download-cycle (values count cycle)))))
-                  (t
-                   (handler-case 
-                       (download-noaa-file% cycle offset destpath :resolution resolution)
-                     (uiop/run-program:subprocess-error (e)
-                       (log2:trace "curl error: ~a" e)
-                       (go :retry)))))))))
-     :finally (return (values count cycle))))
+    :with start-time = (now)
+    :for count :from 1
+    :for offset :across +noaa-forecast-offsets+
+    :while (<= offset max-offset)
+    :do (loop :for res :in resolution
+              :do (progn
+                    (download-forecast start-time cycle offset res)
+                    (sleep 3)))
+    :finally (return (values count cycle))))
+
+(defun download-forecast (start-time cycle offset resolution)
+  (let* ((destpath
+           (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
+    (cond
+      ((probe-file destpath)
+       (log2:info "File exists: ~a)" destpath))
+      (t
+       (tagbody
+         :retry
+         (when (> (timestamp-difference (now) start-time) (* 60 60 3))
+           (log2:error "Giving up download of ~a at offset ~a" cycle offset)
+           (error "Incomplete cycle ~a" cycle))
+         (cond
+           ((not (noaa-file-exists-p cycle offset resolution))
+            (ecase if-missing
+              (:wait
+               (log2:info "Wait ~as for ~a-~a" *retry-interval* cycle offset)
+               (sleep *retry-interval*)
+               (go :retry))
+              (:abort
+               (return-from download-forecast (values count cycle)))))
+           (t
+            (handler-case 
+                (download-noaa-file% cycle offset destpath :resolution resolution)
+              (uiop/run-program:subprocess-error (e)
+                (log2:trace "curl error: ~a" e)
+                (go :retry))))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Check if forecast exists on server
@@ -326,6 +332,7 @@
 
 (defstruct http-status protocol code text)
 (defun parse-status-line (s)
+  (log2:trace "~a" s) 
   (let* ((p1 (position #\Space s))
          (p2 (position #\Space s :start (1+ p1)))) 
     (make-http-status :protocol (subseq s 0 p1)
@@ -335,6 +342,7 @@
 
 (defstruct http-header name value)
 (defun parse-http-header (s)
+  (log2:trace "~a" s) 
   (let ((p (position #\: s)))
     (make-http-header :name (subseq s 0 p)
                       :value (string-trim " " (subseq s (1+ p))))))

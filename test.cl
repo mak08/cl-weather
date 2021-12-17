@@ -1,13 +1,30 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2021-05-25 21:34:56>
+;;; Last Modified <michael 2021-12-16 20:03:24>
 
 (in-package :cl-weather)
 
-(declaim (optimize speed (debug 0) (safety 0))
+(declaim (optimize debug safety)
          #+()(ftype (function (double-float double-float) double-float)
             enorm-d))
+
+(defun test-wind (lat lon &key
+                            (time (now))
+                            (method :bilinear)
+                            (merge-start 6.0d0)
+                            (merge-window 0.0d0)
+                            (cycle (available-cycle time))
+                            (resolution "1p00"))
+  (let ((iparams
+          (interpolation-parameters time
+                                    :method method
+                                    :merge-start merge-start
+                                    :merge-window merge-window
+                                    :cycle cycle
+                                    :resolution resolution)))
+    (interpolated-prediction lat lon iparams)))
+
 
 (defun test-forecast-fraction (&key (timestamp (now)) (cycle))
   (let* ((forecast (cycle-forecast cycle timestamp))
