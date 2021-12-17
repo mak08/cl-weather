@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-12-17 16:49:50>
+;;; Last Modified <michael 2021-12-17 18:19:56>
 
 (in-package "CL-WEATHER")
 
@@ -79,16 +79,17 @@
     :while (<= offset max-offset)
     :do (loop :for res :in resolution
               :do (progn
-                    (download-forecast start-time cycle offset res)
-                    (sleep 3)))
+                    (when (download-forecast start-time cycle offset res :if-missing if-missing)
+                      (sleep 3))))
     :finally (return (values count cycle))))
 
-(defun download-forecast (start-time cycle offset resolution)
+(defun download-forecast (start-time cycle offset resolution &key (if-missing :wait))
   (let* ((destpath
            (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
     (cond
       ((probe-file destpath)
-       (log2:info "File exists: ~a)" destpath))
+       (log2:info "File exists: ~a)" destpath)
+       (values nil))
       (t
        (tagbody
          :retry
