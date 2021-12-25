@@ -1,9 +1,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Access to NOAA forecasts (non-interpolated)
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-12-10 21:20:59>
+;;; Last Modified <michael 2021-12-25 19:25:34>
 
 (in-package "CL-WEATHER")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
 
 (defun noaa-forecast (&key (cycle 0) (offset 0) (resolution "1p00"))
   "Read GRIB data into U and V arrays. Assumes the GRIB file contains U-GRD and V-GRD values"
@@ -34,6 +37,22 @@
            (log2:warning "codes-index-add-file: ~a: ~a" filename retcode)
            (error "eccodes: ~a: ~a" filename message))))
       (get-uv-steps-from-index index))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Cleanup forecast HT to avoid memory exhaustion
+
+(defvar *forecast-cleanup-timer*)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+
+(defun noaa-start-forecast-ht-cleanup ()
+  (log2:info "Starting forecast cleanup thread")
+  (setf *forecast-cleanup-timer*
+        (timers:add-timer #'noaa-forecast-ht-cleanup
+                          :id "FORECAST-CLEANUP"
+                          :hours '(5 11 17 23)
+                          :minutes '(0))))
 
 (defun noaa-forecast-ht-cleanup ()
   (let* ((expiry (adjust-timestamp (now) (:offset :day -2))))

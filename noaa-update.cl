@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-12-17 16:34:54>
+;;; Last Modified <michael 2021-12-25 19:20:45>
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -14,26 +14,20 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
 
-(defvar *update-timer*)
-(defvar *forecast-cleanup-timer*)
+(defvar *download-timer*)
 
 (defun noaa-start-updates (&key (resolution '("1p00")) (max-offset 384))
   (download-latest-cycle :resolution resolution :max-offset max-offset)
   (when (cycle-updating-p)
     (download-cycle (current-cycle) :resolution resolution :max-offset max-offset :if-missing :wait))
-  (setf *update-timer*
+  (setf *download-timer*
         (timers:add-timer (lambda ()
                             (download-cycle (current-cycle) :resolution resolution :max-offset max-offset :if-missing :wait))
                           :id (format nil "GFS-~a-UPDATE" resolution)
                           :hours '(3 9 15 21)
-                          :minutes '(30))))
+                          :minutes '(30)))
+  (noaa-start-forecast-ht-cleanup))
 
-(defun noaa-start-cleanup ()
-  (setf *forecast-cleanup-timer*
-        (timers:add-timer #'noaa-forecast-ht-cleanup
-                          :id "FORECAST-CLEANUP"
-                          :hours '(5 11 17 23)
-                          :minutes '(0))))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
