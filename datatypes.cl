@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2021-12-09 22:42:36>
+;;; Last Modified <michael 2021-12-19 12:49:48>
 
 (in-package :cl-weather)
 
@@ -245,7 +245,7 @@
                                              merge-window
                                              (cycle (available-cycle timestamp))
                                              (resolution "1p00"))
-  (log2:trace "T:~a C:~a M:~a S:~a W:~a" timestamp cycle method merge-start merge-window)
+  (log2:trace "T:~a C:~a R:~a M:~a S:~a W:~a" timestamp cycle resolution method merge-start merge-window)
   (let* ((cycle1 (or cycle (available-cycle timestamp)))
          (cycle0 (previous-cycle cycle1))
          (current (prediction-parameters timestamp
