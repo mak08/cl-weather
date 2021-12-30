@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Access to NOAA forecasts (non-interpolated)
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-12-26 20:17:54>
+;;; Last Modified <michael 2021-12-30 17:53:02>
 
 (in-package "CL-WEATHER")
 
@@ -55,7 +55,7 @@
                           :minutes '(0))))
 
 (defun noaa-forecast-ht-cleanup ()
-  (let* ((expiry (adjust-timestamp (now) (:offset :day -2))))
+  (let* ((expiry (adjust-timestamp (now) (:offset :day -1))))
     (bordeaux-threads:with-lock-held (+noaa-forecast-ht-lock+)
       (log2:info "Searching hash entries older than ~a" (format-timestring nil expiry))
       (maphash
