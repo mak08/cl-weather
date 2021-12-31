@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-12-31 15:11:09>
+;;; Last Modified <michael 2021-12-31 15:33:06>
 
 (in-package "CL-WEATHER")
 
@@ -201,7 +201,7 @@
 (defun download-noaa-file%% (cycle offset destpath &key (resolution "1p00"))
   "Retrieve the GRIB file valid at timestamp according to VR rules"
   (log2:info "Downloading ~a-~a to ~a" cycle offset destpath)
-  (let* ((spec (noaa-spec :cycle cycle :offset offset))
+  (let* ((spec (noaa-spec :cycle cycle :offset offset :resolution resolution))
          (date (cycle-datestring cycle))
          (run (cycle-run cycle))
          (query
