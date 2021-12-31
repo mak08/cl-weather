@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-12-29 16:31:47>
+;;; Last Modified <michael 2021-12-31 15:11:09>
 
 (in-package "CL-WEATHER")
 
@@ -207,7 +207,7 @@
          (query
           (format nil "~a&~a&~a&~a&~a&~a&~a&~a&~a"
                   (format nil "file=~a" spec)
-                  (format nil "dir=%2Fgfs.~a%2F~2,,,'0@a" date run)
+                  (format nil "dir=%2Fgfs.~a%2F~2,,,'0@a%2Fatmos" date run)
                   "lev_10_m_above_ground=on"
                   "var_UGRD=on"
                   "var_VGRD=on"
