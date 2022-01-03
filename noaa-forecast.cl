@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Access to NOAA forecasts (non-interpolated)
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-01-03 12:24:49>
+;;; Last Modified <michael 2022-01-03 21:24:20>
 
 (in-package "CL-WEATHER")
 
@@ -19,19 +19,16 @@
           (setf (gethash key *noaa-forecast-ht*)
                 (noaa-forecast% :cycle cycle :offset offset :resolution resolution))))))
 
-(defun noaa-forecast% (&key (cycle 0) (offset 0) (resolution "1p00") (load-missing nil))
+(defun noaa-forecast% (&key (cycle 0) (offset 0) (resolution "1p00"))
   (let ((filename (namestring (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
         (index (codes-index-new '("step" "shortName"))))
-    (when load-missing
-      (setf filename
-            (namestring (download-noaa-file cycle offset))))
     (log2:trace "Add file ~a~%" filename)
     (let ((retcode (codes-index-add-file index filename)))
       (case retcode
         (0)
         (-11
          (log2:warning "codes-index-add-file: ~a ~a" filename retcode)
-         (error "File ~a not found" filename))
+         (error 'missing-forecast :cyle cycle :offset offset :resolution resolution :filename filename))
         (t
          (let ((message (codes-get-error-message retcode)))
            (log2:warning "codes-index-add-file: ~a: ~a" filename retcode)

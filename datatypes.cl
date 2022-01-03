@@ -1,11 +1,22 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2021-12-19 12:49:48>
+;;; Last Modified <michael 2022-01-03 21:45:50>
 
 (in-package :cl-weather)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
 
+(define-condition missing-forecast (error)
+  ((cycle :initarg :cycle :reader cycle)
+   (offset :initarg :offset :reader offset)
+   (resolution :initarg :resolution :reader resolution)
+   (filename :initarg :filename :reader filename))
+  (:report
+   (lambda (c s)
+     (format s "Missing forecast ~a" (filename c)))))
+           
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Forecast set
 ;;;
@@ -214,30 +225,42 @@
                                           merge-start
                                           merge-window
                                           (cycle (available-cycle timestamp))
-                                          (resolution "1p00"))
+                                          (resolution "1p00")
+                                          (retry 1))
   ;; If $date is provided, $cycle must also be provided, and the specified forecast will be used.
   ;; Otherwise, the latest available forecast will be used.
   ;; ### ToDo ### The $next-fc may not be available yet!
   (log2:trace "timestamp:~a cycle:~a" timestamp cycle)
-  (let* ((forecast (cycle-forecast cycle timestamp))
-         (next-fc (next-forecast forecast))
-         (ds0 (noaa-forecast :cycle cycle :offset forecast :resolution resolution))
-         (ds1 (noaa-forecast :cycle cycle :offset next-fc :resolution resolution))
-         (fc0 (dataset-forecast ds0))
-         (fc1 (dataset-forecast ds1))
-         (fraction (forecast-fraction fc0 fc1 timestamp))
-         (info (dataset-grib-info ds0)))
-    (make-params :info info
-                 :timestamp timestamp
-                 :base-time (cycle-timestamp cycle)
-                 :method method
-                 :merge-start merge-start
-                 :merge-window merge-window
-                 :forecast forecast
-                 :next-fc next-fc
-                 :fc0 fc0
-                 :fc1 fc1
-                 :fraction fraction)))
+  (handler-case
+      (let* ((forecast (cycle-forecast cycle timestamp))
+             (next-fc (next-forecast forecast))
+             (ds0 (noaa-forecast :cycle cycle :offset forecast :resolution resolution))
+             (ds1 (noaa-forecast :cycle cycle :offset next-fc :resolution resolution))
+             (fc0 (dataset-forecast ds0))
+             (fc1 (dataset-forecast ds1))
+             (fraction (forecast-fraction fc0 fc1 timestamp))
+             (info (dataset-grib-info ds0)))
+        (make-params :info info
+                     :timestamp timestamp
+                     :base-time (cycle-timestamp cycle)
+                     :method method
+                     :merge-start merge-start
+                     :merge-window merge-window
+                     :forecast forecast
+                     :next-fc next-fc
+                     :fc0 fc0
+                     :fc1 fc1
+                     :fraction fraction))
+    (missing-forecast (c)
+      (if (> retry 0)
+          (prediction-parameters timestamp
+                                 :method method
+                                 :merge-start merge-start
+                                 :merge-window merge-window
+                                 :cycle (previous-cycle cycle)
+                                 :resolution resolution
+                                 :retry (1- retry))
+          (error c)))))
 
 (defun interpolation-parameters (timestamp &key
                                              method
