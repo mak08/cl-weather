@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-12-31 15:33:06>
+;;; Last Modified <michael 2022-01-03 20:49:51>
 
 (in-package "CL-WEATHER")
 
@@ -88,7 +88,7 @@
            (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
     (cond
       ((probe-file destpath)
-       (log2:info "File exists: ~a)" destpath)
+       (log2:info "File exists: ~a" destpath)
        (values nil))
       (t
        (tagbody
@@ -142,7 +142,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Download forecast
 
-(defun download-noaa-file (cycle offset &key (resolution "1p00") (use-previous nil))
+(defun download-noaa-file (cycle offset &key (resolution "1p00"))
   (let* ((spec (noaa-spec :cycle cycle :offset offset :resolution resolution))
          (destpath (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
     (cond
@@ -159,19 +159,10 @@
          (declare (ignore out error-out))
          (case status
            (0
-            (let ((download-size
-                   (with-open-file (f destpath)
-                     (file-length f))))
-              (cond
-                ((and (< download-size 50000) use-previous)
-                 (log2:warning  "Deleting ~a (short file), trying previous." destpath)
-                 (uiop:delete-file-if-exists destpath)
-                 (return-from download-noaa-file
-                   (download-noaa-file (previous-cycle cycle) offset :resolution resolution :use-previous nil)))
-                ((< download-size 50000)
-                 (log2:warning  "Deleting ~a (short file), giving up." destpath)
-                 (uiop:delete-file-if-exists destpath)
-                 (error "Forecast ~a:~a short file, not available yet?" cycle spec)))))
+            (unless (noaa-file-complete-p destpath)
+              (log2:warning  "Deleting ~a (short file), giving up." destpath)
+              (uiop:delete-file-if-exists destpath)
+              (error "Forecast ~a:~a short file, not available yet?" cycle spec)))
            (otherwise
             (error "cURL error ~a" status))))))
     destpath))
