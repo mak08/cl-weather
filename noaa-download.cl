@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-01-03 20:49:51>
+;;; Last Modified <michael 2022-01-05 17:01:34>
 
 (in-package "CL-WEATHER")
 
@@ -45,6 +45,11 @@
 (defparameter +ncep-nomads+ "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a/atmos")
 (defparameter *noaa-gfs-path* +ncep-nomads+)
 
+(defun download-source-log-string ()
+  (if *use-range-query*
+      (format nil "~a range query" (subseq *noaa-gfs-path* 8 28))
+      "NOMADS grib filter"))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; DOWNLOAD-CYCLE
 ;;;    
@@ -71,7 +76,7 @@
 (defun download-cycle (cycle &key (resolution '("1p00")) (max-offset 384) (if-missing :wait))
   (ecase (cycle-run cycle) ((or 0 6 12 18)))
   (ecase if-missing ((or :wait :abort)))
-  (log2:info "Downloading cycle ~a" cycle)
+  (log2:info "Downloading cycle ~a using ~a" cycle (download-source-log-string))
   (loop
     :with start-time = (now)
     :for count :from 1
@@ -84,6 +89,7 @@
     :finally (return (values count cycle))))
 
 (defun download-forecast (start-time cycle offset resolution &key (if-missing :wait))
+  (log2:trace "Downloading ~a-~a using ~a" cycle offset (download-source-log-string))
   (let* ((destpath
            (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
     (cond
