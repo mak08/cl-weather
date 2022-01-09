@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-01-05 17:01:34>
+;;; Last Modified <michael 2022-01-09 23:37:20>
 
 (in-package "CL-WEATHER")
 
@@ -88,6 +88,7 @@
                       (sleep 3))))
     :finally (return (values count cycle))))
 
+
 (defun download-forecast (start-time cycle offset resolution &key (if-missing :wait))
   (log2:trace "Downloading ~a-~a using ~a" cycle offset (download-source-log-string))
   (let* ((destpath
@@ -120,6 +121,35 @@
               (condition (e)
                 (log2:trace "Unexpected condition: ~a" e)
                 (go :retry))))))))))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Delete cycle
+
+(defun cleanup-cycles ()
+  (log2:info "Deleting old forecasts")
+  (let ((pathnames (directory (format nil "~a*.grib2" *grib-directory*)))
+        (yesterday (adjust-timestamp (now) (offset :day -1))))
+    (dolist (path pathnames)
+      (when (and (timestamp< (timestamp-from-path path)
+                             yesterday)
+                 (not (< 0
+                         (forecast-offset-from-path path)
+                         15)))
+        (log2:info "Deleting ~a" path)
+        (delete-file path)))))
+
+(defun timestamp-from-path (path)
+  (let*  ((filename (pathname-name path))
+          (yyyy (subseq filename 0 4))
+          (mm (subseq filename 4 6))
+          (dd (subseq filename 6 8))
+          (hh (subseq filename 14 16))
+          (date-string (format nil "~a-~a-~aT~a:00:00Z" yyyy mm dd hh)))
+    (parse-rfc3339-timestring date-string)))
+
+(defun forecast-offset-from-path (path)
+  (let*  ((filename (pathname-name path))
+          (forecast (subseq filename 30 33)))
+    (parse-integer forecast)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Check if forecast exists on server
