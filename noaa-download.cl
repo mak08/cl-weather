@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-01-09 23:37:20>
+;;; Last Modified <michael 2022-01-15 16:42:52>
 
 (in-package "CL-WEATHER")
 
@@ -126,16 +126,29 @@
 
 (defun cleanup-cycles ()
   (log2:info "Deleting old forecasts")
-  (let ((pathnames (directory (format nil "~a*.grib2" *grib-directory*)))
-        (yesterday (adjust-timestamp (now) (offset :day -1))))
+  (let* ((pathnames (directory (format nil "~a*.grib2" *grib-directory*)))
+         (yesterday (adjust-timestamp (now) (offset :day -1)))
+         (archive-dir (make-pathname
+                       :directory (append (pathname-directory *grib-directory*)
+                                          '("archive"))))
+         (have-archive (ignore-errors
+                        (ensure-directories-exist archive-dir))))
+    (unless have-archive
+      (log2:warning "Directory ~a does not exist, not archiving" archive-dir))
     (dolist (path pathnames)
-      (when (and (timestamp< (timestamp-from-path path)
-                             yesterday)
-                 (not (< 0
-                         (forecast-offset-from-path path)
-                         15)))
-        (log2:info "Deleting ~a" path)
-        (delete-file path)))))
+      (when (timestamp< (timestamp-from-path path)
+                        yesterday)
+        (cond
+          ((not (< 0
+                   (forecast-offset-from-path path)
+                   15))
+           (log2:info "Deleting ~a" path)
+           (delete-file path))
+          (t
+           (when have-archive
+             (log2:info "Archiving ~a" path)
+             (rename-file path
+                          (merge-pathnames archive-dir path)))))))))
 
 (defun timestamp-from-path (path)
   (let*  ((filename (pathname-name path))
