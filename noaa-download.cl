@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-01-15 16:42:52>
+;;; Last Modified <michael 2022-01-22 21:16:25>
 
 (in-package "CL-WEATHER")
 
@@ -94,7 +94,8 @@
   (let* ((destpath
            (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
     (cond
-      ((probe-file destpath)
+      ((and (probe-file destpath)
+            (noaa-file-complete-p destpath))
        (log2:info "File exists: ~a" destpath)
        (values nil))
       (t
@@ -172,21 +173,26 @@
   (let* ((fc-url
           (noaa-file cycle offset :resolution resolution))
          (idx-url
-          (noaa-index-file cycle offset :resolution resolution))
-         (check-fc
-          (format () "curl -sfI --connect-timeout ~a ~a" *connect-timeout* fc-url))
-         (check-idx
-          (format () "curl -sfI --connect-timeout ~a ~a" *connect-timeout* idx-url)))
+          (noaa-index-file cycle offset :resolution resolution)))
     (log2:trace "Checking ~a + .idx" fc-url)
-    (handler-case 
-       (and (null (uiop:run-program check-fc))
-            (null (uiop:run-program check-idx)))
-      (uiop/run-program:subprocess-error (e)
-        (log2:trace "curl error: ~a" e)
-        nil)
-      (condition (e)
-        (log2:trace "Unexpected condition: ~a" e)
-        nil))))
+    (and (check-uri-exists fc-url)
+         (check-uri-exists idx-url))))
+
+(defun check-uri-exists (uri)
+  (handler-case
+      (let ((response (http-get uri :method :head)))
+        (case (http-status-code
+               (http-response-status response))
+          (200
+           t)
+          (otherwise
+           nil)))
+    (uiop/run-program:subprocess-error (e)
+      (log2:trace "curl error: ~a" e)
+      nil)
+    (condition (e)
+      (log2:trace "Unexpected condition: ~a" e)
+      nil)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Download forecast
@@ -337,25 +343,33 @@
     (values (parse-integer u10-range-start)
             (1- (parse-integer range-end)))))
 
-(defun http-get (url &key (headers ()))
-  (let ((ftp-command
-         (format () "curl -i ~{ -H ~a~} \"~a\"" headers url))
-        (out-stream (make-array '(0) :element-type 'base-char :fill-pointer 0 :adjustable t))
-        (err-stream (make-array '(0) :element-type 'base-char :fill-pointer 0 :adjustable t)))
+(defun http-get (url &key (headers ()) (method :get))
+  (ecase method ((:get :head)))
+  (let* ((head-flag (if (eq method :head) "-I" ""))
+         (ftp-command
+           (format () "curl -i ~a ~{ -H ~a~} \"~a\"" head-flag headers url))
+         (out-stream (make-array '(0) :element-type 'character :fill-pointer 0 :adjustable t))
+         (err-stream (make-array '(0) :element-type 'character :fill-pointer 0 :adjustable t)))
     (log2:trace "~a" ftp-command)
     (with-output-to-string (out out-stream)
       (with-output-to-string (err err-stream)
         (multiple-value-bind (out-status err-status program-status)
-            (uiop:run-program ftp-command :output out :error-output err)
+            (uiop:run-program ftp-command :ignore-error-status t :output out :error-output err)
           (declare (ignore out-status err-status))
           (case program-status
             (0
-             (parse-http-response out-stream))
+             (parse-http-response out-stream :fetch-body (not (eq method :head))))
+            (3
+             (error "curl: error 3 (URL malformed)"))
+            (6
+             (error "curl: error 6 (Couldn't resolve host)"))
+            (7
+             (error "curl: error 7 (Failed to connect to host)"))
             (t
-             (error "curl failed with code ~a" program-status))))))))
+             (error "curl: error ~a" program-status))))))))
 
 (defstruct http-response status headers body)
-(defun parse-http-response (s)
+(defun parse-http-response (s &key (fetch-body t))
   (with-input-from-string (f s)
     (let*
         ((status-line
@@ -365,17 +379,25 @@
              :for line = (read-line f nil nil)
              :while  (> (length line) 1)
              :collect (parse-http-header line)))
-         (content-length
-          (parse-integer
-           (http-header-value
-            (find-if (lambda (h) (string-equal (http-header-name h) "Content-Length"))
-                     headers))))
-         (buffer
-          (make-array content-length :element-type 'character)))
-      (read-sequence buffer f)
+         (body
+           (cond
+             (fetch-body
+              (let* ((content-length-header
+                       (find "Content-Length" headers :test #'string-equal :key #'http-header-name))
+                     (content-length
+                       (if content-length-header
+                           (parse-integer
+                            (http-header-value content-length-header))
+                           0))
+                     (buffer
+                       (make-array content-length :element-type 'character)))
+                (read-sequence buffer f)
+                buffer))
+             (t
+              #()))))
       (make-http-response :status status-line
                           :headers headers
-                          :body buffer))))
+                          :body body))))
 
 (defstruct http-status protocol code text)
 (defun parse-status-line (s)
