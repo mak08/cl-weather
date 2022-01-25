@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Access to NOAA forecasts (non-interpolated)
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-01-03 21:24:20>
+;;; Last Modified <michael 2022-01-25 22:09:08>
 
 (in-package "CL-WEATHER")
 
@@ -20,8 +20,10 @@
                 (noaa-forecast% :cycle cycle :offset offset :resolution resolution))))))
 
 (defun noaa-forecast% (&key (cycle 0) (offset 0) (resolution "1p00"))
-  (let ((filename (namestring (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
+  (let ((filename (find-file-for-spec :cycle cycle :offset offset :resolution resolution))
         (index (codes-index-new '("step" "shortName"))))
+    (unless filename
+      (error 'missing-forecast :cyle cycle :offset offset :resolution resolution :filename filename))
     (log2:trace "Add file ~a~%" filename)
     (let ((retcode (codes-index-add-file index filename)))
       (case retcode
@@ -34,6 +36,14 @@
            (log2:warning "codes-index-add-file: ~a: ~a" filename retcode)
            (error "eccodes: ~a: ~a" filename message))))
       (get-uv-steps-from-index index))))
+
+(defun find-file-for-spec (&key cycle offset resolution)
+  (let ((path (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
+    (if (probe-file path)
+        (namestring path)
+        (let ((path  (noaa-archivepath :cycle cycle :offset offset :resolution resolution)))
+          (if (probe-file path)
+              (namestring path))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Cleanup forecast HT to avoid memory exhaustion

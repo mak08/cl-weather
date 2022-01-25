@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-01-22 21:16:25>
+;;; Last Modified <michael 2022-01-25 22:01:30>
 
 (in-package "CL-WEATHER")
 
@@ -449,6 +449,17 @@
          (destfile 
            (format () "~a_~a.grib2" (cycle-datestring cycle) spec)))
     (merge-pathnames destfile *grib-directory*)))
+
+(defun noaa-archivepath (&key (cycle 0) (offset 6) (basename "pgrb2") (resolution "1p00"))
+  (let* ((spec
+           (noaa-spec :cycle cycle :offset offset  :basename basename :resolution resolution))
+         (archive-dir
+           (make-pathname
+            :directory (append (pathname-directory *grib-directory*)
+                               '("archive"))))
+         (destfile 
+           (format () "~a_~a.grib2" (cycle-datestring cycle) spec)))
+    (merge-pathnames destfile archive-dir)))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
