@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2021-12-09 22:45:28>
+;;; Last Modified <michael 2022-02-02 01:02:29>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -47,6 +47,7 @@
         (time-interpolate lat lng info current offset-new previous)
       (position-interpolate method wlat wlng u00 u01 u10 u11 v00 v01 v10 v11))))
 
+(declaim (inline time-interpolate))
 (defun time-interpolate (lat lng info current offset-new previous)
   (declare (inline grib-get-uv))
   (let* ((i-inc (gribinfo-i-inc info))
@@ -64,9 +65,9 @@
                     ((u10 v10) (time-interpolate-index i10 current offset-new previous))
                     ((u11 v11) (time-interpolate-index i11 current offset-new previous)))
       (values u00 u01 u10 u11
-              v00 v01 v10 v11
-))))
+              v00 v01 v10 v11))))
 
+(declaim (inline time-interpolate-index))
 (defun time-interpolate-index (index current offset previous)
   (let* ((fraction (params-fraction current))
          (f0c1 (params-fc0 current))
@@ -110,6 +111,7 @@
                (v (linear fraction v0 v1)))
            (values u v)))))))
 
+(declaim (inline position-interpolate))
 (defun position-interpolate (method wlat wlng u00 u01 u10 u11 v00 v01 v10 v11)
   (let* ((wind-u (bilinear wlat wlng u00 u01 u10 u11))
          (wind-v (bilinear wlat wlng v00 v01 v10 v11))
