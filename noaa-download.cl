@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-01-25 22:01:30>
+;;; Last Modified <michael 2022-01-25 23:30:37>
 
 (in-package "CL-WEATHER")
 
@@ -142,7 +142,7 @@
         (cond
           ((not (< 0
                    (forecast-offset-from-path path)
-                   15))
+                   16))
            (log2:info "Deleting ~a" path)
            (delete-file path))
           (t
