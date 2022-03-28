@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2022-03-14 23:46:01>
+;;; Last Modified <michael 2022-03-19 00:19:21>
 
 ;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
 
@@ -34,7 +34,23 @@
     (vr-prediction% lat lng params nil)))
 
 (declaim (inline magnitude-factor))
-(defun magnitude-factor (wlat wlng wind-u wind-v s00 s01 s10 s11 u00 u01 u10 u11 v00 v01 v10 v11)
+(defun-t magnitude-factor double-float
+    ((wlat double-float)
+     (wlng double-float)
+     (wind-u double-float)
+     (wind-v double-float)
+     (s00 double-float)
+     (s01 double-float)
+     (s10 double-float)
+     (s11 double-float)
+     (u00 double-float)
+     (u01 double-float)
+     (u10 double-float)
+     (u11 double-float)
+     (v00 double-float)
+     (v01 double-float)
+     (v10 double-float)
+     (v11 double-float))
   (flet ((avg4 (x1 x2 x3 x4)
            (/ (+ x1 x2 x3 x4) 4))
          (scoeff (a0 a1)
