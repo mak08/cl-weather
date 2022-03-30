@@ -1,21 +1,38 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2022-01-03 21:45:50>
+;;; Last Modified <michael 2022-03-30 21:09:58>
 
 (in-package :cl-weather)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
 
-(define-condition missing-forecast (error)
+(define-condition weather-condition (error)
   ((cycle :initarg :cycle :reader cycle)
    (offset :initarg :offset :reader offset)
    (resolution :initarg :resolution :reader resolution)
    (filename :initarg :filename :reader filename))
   (:report
    (lambda (c s)
+     (declare (ignore c))
+     (format s "weather-condition"))))
+
+(define-condition missing-forecast (weather-condition)
+  ()
+  (:report
+   (lambda (c s)
      (format s "Missing forecast ~a" (filename c)))))
+
+(define-condition incomplete-download (weather-condition)
+  ()
+  (:report
+   (lambda (c s)
+     (format s "Incomplete download ~a for ~a ~a ~a"
+             (filename c)
+             (cycle c)
+             (offset c)
+             (resolution c)))))
            
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Forecast set

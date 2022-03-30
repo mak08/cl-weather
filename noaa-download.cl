@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-01-25 23:30:37>
+;;; Last Modified <michael 2022-03-30 21:38:35>
 
 (in-package "CL-WEATHER")
 
@@ -105,7 +105,7 @@
            (log2:error "Giving up download of ~a at offset ~a" cycle offset)
            (error "Incomplete cycle ~a" cycle))
          (cond
-           ((not (noaa-file-exists-p cycle offset resolution))
+           ((not (noaa-uris-exist-p cycle offset resolution))
             (ecase if-missing
               (:wait
                (log2:info "Wait ~as for ~a-~a" *retry-interval* cycle offset)
@@ -168,15 +168,18 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Check if forecast exists on server
 
-(defun noaa-file-exists-p (cycle offset resolution)
+(defun noaa-uris-exist-p (cycle offset resolution)
   "Check if the specified forecast exists. $date='YYYYMMDD', $cycle='CC', $offset may be numeric or string."
   (let* ((fc-url
           (noaa-file cycle offset :resolution resolution))
          (idx-url
-          (noaa-index-file cycle offset :resolution resolution)))
-    (log2:trace "Checking ~a + .idx" fc-url)
-    (and (check-uri-exists fc-url)
-         (check-uri-exists idx-url))))
+           (noaa-index-file cycle offset :resolution resolution))
+         (result
+           (and (check-uri-exists fc-url)
+                (check-uri-exists idx-url))))
+    (log2:trace "Checking ~a + .idx ==> ~a" fc-url result)
+    result))
+
 
 (defun check-uri-exists (uri)
   (handler-case
@@ -230,21 +233,26 @@
             (make-array 4)))
       (file-position f (- length 4))
       (read-sequence closing-bytes f)
-      (every
-       (lambda (c) (eql c #\7))
-       closing-bytes))))
-
+      (let ((result
+              (every
+               (lambda (c) (eql c #\7))
+               closing-bytes)))
+        (log2:trace "Checking complete download ~a ==> ~a" destpath result)
+        result))))
 
 (defun download-noaa-file% (cycle offset destpath &key (resolution "1p00"))
   "Retrieve the GRIB file valid at timestamp according to VR rules"
   (if *use-range-query*
-      (grib2-download-file-u-v-10 cycle offset :resolution resolution)
-      (download-noaa-file%% cycle offset destpath :resolution resolution)))
+      (grib2-range-uv10 cycle offset destpath :resolution resolution)
+      (grib2-filter-uv10 cycle offset destpath :resolution resolution))
+  (unless (and (probe-file destpath)
+               (noaa-file-complete-p destpath))
+    (error 'download-incomplete :cycle cycle :offset offset :destpath destpath)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Download by filter
 
-(defun download-noaa-file%% (cycle offset destpath &key (resolution "1p00"))
+(defun grib2-filter-uv10 (cycle offset destpath &key (resolution "1p00"))
   "Retrieve the GRIB file valid at timestamp according to VR rules"
   (log2:info "Downloading ~a-~a to ~a" cycle offset destpath)
   (let* ((spec (noaa-spec :cycle cycle :offset offset :resolution resolution))
@@ -265,7 +273,7 @@
           (format nil
                   "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_~a.pl?~a" resolution query))
          (ftp-command
-          (format () "curl --connect-timeout ~a -n \"~a\" -o ~a" *connect-timeout* url destpath)))
+          (format () "curl --max-time 480 --connect-timeout ~a -n \"~a\" -o ~a" *connect-timeout* url destpath)))
     (log2:trace "~a" ftp-command)
     (uiop:run-program ftp-command)))
 
@@ -282,9 +290,8 @@
         (setf (gethash key *grib-index-ht*)
               value))))
 
-(defun grib2-download-file-u-v-10 (cycle offset &key (resolution "1p00"))
-  (let* ((destpath (noaa-destpath :cycle cycle :offset offset :resolution resolution))
-         (spec (format nil "~a~a~a" cycle offset resolution))
+(defun grib2-range-uv10 (cycle offset destpath &key (resolution "1p00"))
+  (let* ((spec (format nil "~a~a~a" cycle offset resolution))
          (index (cached-grib-index spec
                                    (grib2-get-index cycle offset :resolution resolution))))
     (log2:info "Downloading ~a-~a to ~a" cycle offset destpath)
@@ -297,7 +304,7 @@
                       path
                       start
                       end))
-             (command (format () "curl ~a\ -o ~a" url destpath)))
+             (command (format () "curl --max-time 480 --connect-timeout ~a ~a\ -o ~a" *connect-timeout* url destpath)))
         (log2:trace "Command: ~a" command)
         (uiop:run-program command)))))
 
@@ -347,7 +354,7 @@
   (ecase method ((:get :head)))
   (let* ((head-flag (if (eq method :head) "-I" ""))
          (ftp-command
-           (format () "curl -i ~a ~{ -H ~a~} \"~a\"" head-flag headers url))
+           (format () "curl --max-time 3 -i ~a ~{ -H ~a~} \"~a\"" head-flag headers url))
          (out-stream (make-array '(0) :element-type 'character :fill-pointer 0 :adjustable t))
          (err-stream (make-array '(0) :element-type 'character :fill-pointer 0 :adjustable t)))
     (log2:trace "~a" ftp-command)
