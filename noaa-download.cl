@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-03-30 21:38:35>
+;;; Last Modified <michael 2022-04-03 02:37:22>
 
 (in-package "CL-WEATHER")
 
@@ -226,7 +226,7 @@
     destpath))
 
 (defun noaa-file-complete-p (destpath)
-  (with-open-file (f destpath)
+  (with-open-file (f destpath :element-type 'character :external-format :utf-8)
     (let* ((length
             (file-length f))
            (closing-bytes
