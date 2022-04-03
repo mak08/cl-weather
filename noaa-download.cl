@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-04-03 02:37:22>
+;;; Last Modified <michael 2022-04-03 18:14:37>
 
 (in-package "CL-WEATHER")
 
@@ -231,12 +231,13 @@
             (file-length f))
            (closing-bytes
             (make-array 4)))
-      (file-position f (- length 4))
-      (read-sequence closing-bytes f)
+      (ignore-errors
+        (file-position f (- length 4))
+        (read-sequence closing-bytes f))
       (let ((result
-              (every
-               (lambda (c) (eql c #\7))
-               closing-bytes)))
+             (every
+              (lambda (c) (eql c #\7))
+              closing-bytes)))
         (log2:trace "Checking complete download ~a ==> ~a" destpath result)
         result))))
 
