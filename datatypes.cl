@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2022-03-30 21:09:58>
+;;; Last Modified <michael 2022-05-29 11:30:49>
 
 (in-package :cl-weather)
 
@@ -22,7 +22,7 @@
   ()
   (:report
    (lambda (c s)
-     (format s "Missing forecast ~a" (filename c)))))
+     (format s "Missing forecast ~a-~a ~a ~a" (cycle c) (offset c) (resolution c) (filename c)))))
 
 (define-condition incomplete-download (weather-condition)
   ()
@@ -55,9 +55,6 @@
   (format-timestring nil (cycle-timestamp cycle)
                      :format '((:year 4) (:month 2) (:day 2))
                      :timezone +utc-zone+))
-
-(defun-t cycle-as-timestamp timestamp ((cycle cycle))
-  (cycle-timestamp cycle))
 
 (defun-t cycle-run fixnum ((cycle cycle))
   (timestamp-hour (cycle-timestamp cycle) :timezone +utc-zone+))
@@ -198,7 +195,7 @@
        (lonpoints (gribinfo-lon-points info))
        (lat-offset (* lat-index lonpoints))
        (uv-index (+ lat-offset lon-index)))
-    ;;(log2:trace "Lat: ~a Lng: ~a Index: ~a" lat lon uv-index)
+    ;; (log2:trace "Lat: ~a Lng: ~a Index: ~a" lat lon uv-index)
     uv-index))
 
 (defun dataset-forecast (dataset)

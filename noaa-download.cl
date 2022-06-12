@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-04-03 18:14:37>
+;;; Last Modified <michael 2022-06-12 11:22:22>
 
 (in-package "CL-WEATHER")
 
@@ -41,8 +41,10 @@
 (defvar *use-range-query* t)
 ;; The FTP folder only works with range query, not with a filter URL
 
-(defparameter +ncep-ftpprd+ "https://ftpprd.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a/atmos")
 (defparameter +ncep-nomads+ "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a/atmos")
+(defparameter +ncep-ftpprd+ "https://ftpprd.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.~a/~2,,,'0@a/atmos")
+(defparameter +gens-ftpprd+ "https://ftpprd.ncep.noaa.gov/data/nccf/com/gens/prod/gefs.~a/~2,,,'0@a/atmos/pgrb2ap5") ;; /gep05.t00z.pgrb2a.0p50.f756.idx
+
 (defparameter *noaa-gfs-path* +ncep-nomads+)
 
 (defun download-source-log-string ()
@@ -125,7 +127,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Delete cycle
 
-(defun cleanup-cycles ()
+(defun cleanup-cycles (&key (dry-run t))
   (log2:info "Deleting old forecasts")
   (let* ((pathnames (directory (format nil "~a*.grib2" *grib-directory*)))
          (yesterday (adjust-timestamp (now) (offset :day -1)))
@@ -135,7 +137,8 @@
          (have-archive (ignore-errors
                         (ensure-directories-exist archive-dir))))
     (unless have-archive
-      (log2:warning "Directory ~a does not exist, not archiving" archive-dir))
+      (log2:warning "Directory ~a does not exist, not archiving" archive-dir)
+      (return-from cleanup-cycles nil))
     (dolist (path pathnames)
       (when (timestamp< (timestamp-from-path path)
                         yesterday)
@@ -146,10 +149,20 @@
            (log2:info "Deleting ~a" path)
            (delete-file path))
           (t
-           (when have-archive
-             (log2:info "Archiving ~a" path)
-             (rename-file path
-                          (merge-pathnames archive-dir path)))))))))
+           (let* ((name (pathname-name path))
+                  (file-date-path
+                    (list (subseq name 0 4)
+                          (subseq name 4 6)
+                          (subseq name 6 8)))
+                  (archive-path
+                    (make-pathname :directory (append (pathname-directory *grib-directory*)
+                                                      '("archive")
+                                                      file-date-path))))
+             (log2:info "Archiving ~a to ~a" path (merge-pathnames archive-path path))
+             (when (not dry-run)
+               (ensure-directories-exist archive-path)
+               (rename-file path
+                            (merge-pathnames archive-path path))))))))))
 
 (defun timestamp-from-path (path)
   (let*  ((filename (pathname-name path))
@@ -182,6 +195,7 @@
 
 
 (defun check-uri-exists (uri)
+  (log2:trace "~a" uri)
   (handler-case
       (let ((response (http-get uri :method :head)))
         (case (http-status-code
@@ -427,7 +441,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Grib filter input file name 
 
-(defun noaa-spec (&key (cycle 0) (offset 6) (basename "pgrb2") (resolution "1p00"))
+(defun noaa-spec (&key (cycle (make-cycle)) (offset 6) (basename "pgrb2") (resolution "1p00"))
   (format () "gfs.t~2,,,'0@az.~a.~a.f~3,,,'0@a"
           (cycle-run cycle)
           basename
@@ -451,7 +465,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Local forecast file name
 
-(defun noaa-destpath (&key (cycle 0) (offset 6) (basename "pgrb2") (resolution "1p00"))
+(defun noaa-destpath (&key (cycle (make-cycle)) (offset 6) (basename "pgrb2") (resolution "1p00"))
   (let* ((spec
            (noaa-spec :cycle cycle :offset offset  :basename basename :resolution resolution))
          (destfile 

@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-01-09 23:48:41>
+;;; Last Modified <michael 2022-06-12 11:42:06>
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -36,7 +36,7 @@
                           :minutes '(30)))
   (setf *cleanup-timer*
         (timers:add-timer (lambda ()
-                            (cleanup-cycles))
+                            (cleanup-cycles :dry-run nil))
                           :id (format nil "CLEANUP-CYCLES" resolution)
                           :hours '(3 9 15 21)
                           :minutes '(10)))

@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2021-07-04 01:13:43>
+;;; Last Modified <michael 2022-05-14 23:25:04>
 
 (in-package "CL-WEATHER")
 
@@ -68,7 +68,7 @@
 
 ;; Return the 3-hour-forecast required for $timestamp when using $cycle
 (defun cycle-forecast (cycle timestamp)
-  (let* ((basetime (cycle-as-timestamp cycle)) 
+  (let* ((basetime (cycle-timestamp cycle)) 
          (difference (truncate
                       (timestamp-difference timestamp basetime)
                       3600)))
