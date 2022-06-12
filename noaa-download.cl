@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-06-12 21:12:13>
+;;; Last Modified <michael 2022-06-12 23:44:27>
 
 (in-package "CL-WEATHER")
 
@@ -165,7 +165,9 @@
            (delete-file path))
           (t
            (let* ((archive-path
-                    (file-archive-path (pathname-name path))))
+                    (file-archive-path (format nil "~a.~a"
+                                               (pathname-name path)
+                                               (pathname-type path)))))
              (log2:info "Archiving ~a to ~a" path archive-path)
              (when (not dry-run)
                (ensure-directories-exist archive-path)
