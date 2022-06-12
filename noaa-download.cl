@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-06-12 11:22:22>
+;;; Last Modified <michael 2022-06-12 20:38:36>
 
 (in-package "CL-WEATHER")
 
@@ -127,6 +127,17 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Delete cycle
 
+(defun file-archive-path (filename)
+  (let* ((file-date-path
+           (list (subseq filename 0 4)
+                 (subseq filename 4 6)
+                 (subseq filename 6 8)))
+         (archive-path
+           (make-pathname :directory (append (pathname-directory *grib-directory*)
+                                             '("archive")
+                                             file-date-path))))
+    (merge-pathnames archive-path filename)))
+
 (defun cleanup-cycles (&key (dry-run t))
   (log2:info "Deleting old forecasts")
   (let* ((pathnames (directory (format nil "~a*.grib2" *grib-directory*)))
@@ -149,20 +160,13 @@
            (log2:info "Deleting ~a" path)
            (delete-file path))
           (t
-           (let* ((name (pathname-name path))
-                  (file-date-path
-                    (list (subseq name 0 4)
-                          (subseq name 4 6)
-                          (subseq name 6 8)))
-                  (archive-path
-                    (make-pathname :directory (append (pathname-directory *grib-directory*)
-                                                      '("archive")
-                                                      file-date-path))))
-             (log2:info "Archiving ~a to ~a" path (merge-pathnames archive-path path))
+           (let* ((archive-path
+                    (file-archive-path (pathname-name path))))
+             (log2:info "Archiving ~a to ~a" path archive-path)
              (when (not dry-run)
                (ensure-directories-exist archive-path)
-               (rename-file path
-                            (merge-pathnames archive-path path))))))))))
+               (rename-file path archive-path)))))))))
+
 
 (defun timestamp-from-path (path)
   (let*  ((filename (pathname-name path))
@@ -475,13 +479,9 @@
 (defun noaa-archivepath (&key (cycle 0) (offset 6) (basename "pgrb2") (resolution "1p00"))
   (let* ((spec
            (noaa-spec :cycle cycle :offset offset  :basename basename :resolution resolution))
-         (archive-dir
-           (make-pathname
-            :directory (append (pathname-directory *grib-directory*)
-                               '("archive"))))
          (destfile 
            (format () "~a_~a.grib2" (cycle-datestring cycle) spec)))
-    (merge-pathnames destfile archive-dir)))
+    (file-archive-path destfile)))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
