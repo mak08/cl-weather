@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-06-12 20:38:36>
+;;; Last Modified <michael 2022-06-12 21:12:13>
 
 (in-package "CL-WEATHER")
 
@@ -95,6 +95,7 @@
   (log2:trace "Downloading ~a-~a using ~a" cycle offset (download-source-log-string))
   (let* ((destpath
            (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
+    (ensure-directories-exist destpath)
     (cond
       ((and (probe-file destpath)
             (noaa-file-complete-p destpath))
@@ -140,7 +141,9 @@
 
 (defun cleanup-cycles (&key (dry-run t))
   (log2:info "Deleting old forecasts")
-  (let* ((pathnames (directory (format nil "~a*.grib2" *grib-directory*)))
+  (let* ((pathnames (append
+                     (directory (format nil "~a/1p00/**/**/*.grib2" *grib-directory*))
+                     (directory (format nil "~a/0p25/**/**/*.grib2" *grib-directory*))))
          (yesterday (adjust-timestamp (now) (offset :day -1)))
          (archive-dir (make-pathname
                        :directory (append (pathname-directory *grib-directory*)
@@ -151,6 +154,7 @@
       (log2:warning "Directory ~a does not exist, not archiving" archive-dir)
       (return-from cleanup-cycles nil))
     (dolist (path pathnames)
+      (log2:trace "Checking ~a" path)
       (when (timestamp< (timestamp-from-path path)
                         yesterday)
         (cond
@@ -473,8 +477,13 @@
   (let* ((spec
            (noaa-spec :cycle cycle :offset offset  :basename basename :resolution resolution))
          (destfile 
-           (format () "~a_~a.grib2" (cycle-datestring cycle) spec)))
-    (merge-pathnames destfile *grib-directory*)))
+           (format () "~a_~a.grib2" (cycle-datestring cycle) spec))
+         (cycle-dir
+           (make-pathname :directory (append (pathname-directory *grib-directory*)
+                                             (list resolution
+                                                   (cycle-datestring cycle)
+                                                   (format nil "~2,,,'0@a" (cycle-run cycle)))))))
+    (merge-pathnames destfile cycle-dir)))
 
 (defun noaa-archivepath (&key (cycle 0) (offset 6) (basename "pgrb2") (resolution "1p00"))
   (let* ((spec
