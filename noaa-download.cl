@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-06-12 23:44:27>
+;;; Last Modified <michael 2022-06-19 14:47:37>
 
 (in-package "CL-WEATHER")
 
@@ -171,7 +171,10 @@
              (log2:info "Archiving ~a to ~a" path archive-path)
              (when (not dry-run)
                (ensure-directories-exist archive-path)
-               (rename-file path archive-path)))))))))
+               (rename-file path archive-path))))))))
+  (when (not dry-run)
+    (log2:info "Deleting empty directories")
+    (remove-empty-directories *grib-directory*)))
 
 
 (defun timestamp-from-path (path)
@@ -187,6 +190,19 @@
   (let*  ((filename (pathname-name path))
           (forecast (subseq filename 30 33)))
     (parse-integer forecast)))
+
+(defun remove-empty-directories (path)
+  (let ((contents (append
+                   (directory
+                    (concatenate 'string (namestring path) "*.*")))))
+    (or (null contents)
+        (every (lambda (p)
+                 (when (and
+                        (null  (pathname-name p))
+                        (remove-empty-directories p))
+                   (log2:info "Deleting ~a" p)
+                   (sb-ext:delete-directory p)))
+               contents))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Check if forecast exists on server
