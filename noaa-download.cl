@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-06-19 14:47:37>
+;;; Last Modified <michael 2022-07-09 15:31:09>
 
 (in-package "CL-WEATHER")
 
@@ -111,7 +111,7 @@
            ((not (noaa-uris-exist-p cycle offset resolution))
             (ecase if-missing
               (:wait
-               (log2:info "Wait ~as for ~a-~a" *retry-interval* cycle offset)
+               (log2:info "Waiting ~as for ~a-~a" *retry-interval* cycle offset)
                (sleep *retry-interval*)
                (go :retry))
               (:abort
@@ -295,7 +295,6 @@
 
 (defun grib2-filter-uv10 (cycle offset destpath &key (resolution "1p00"))
   "Retrieve the GRIB file valid at timestamp according to VR rules"
-  (log2:info "Downloading ~a-~a to ~a" cycle offset destpath)
   (let* ((spec (noaa-spec :cycle cycle :offset offset :resolution resolution))
          (date (cycle-datestring cycle))
          (run (cycle-run cycle))
@@ -314,7 +313,8 @@
           (format nil
                   "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_~a.pl?~a" resolution query))
          (ftp-command
-          (format () "curl --max-time 480 --connect-timeout ~a -n \"~a\" -o ~a" *connect-timeout* url destpath)))
+           (format () "curl --max-time 480 --connect-timeout ~a -n \"~a\" -o ~a" *connect-timeout* url destpath)))
+    (log2:info "Downloading ~a to ~a" url destpath)
     (log2:trace "~a" ftp-command)
     (uiop:run-program ftp-command)))
 
@@ -335,7 +335,6 @@
   (let* ((spec (format nil "~a~a~a" cycle offset resolution))
          (index (cached-grib-index spec
                                    (grib2-get-index cycle offset :resolution resolution))))
-    (log2:info "Downloading ~a-~a to ~a" cycle offset destpath)
     (multiple-value-bind (start end)
         (grib2-get-u-v-10-range index)
       (let* ((path
@@ -346,6 +345,7 @@
                       start
                       end))
              (command (format () "curl --max-time 480 --connect-timeout ~a ~a\ -o ~a" *connect-timeout* url destpath)))
+        (log2:info "Downloading ~a to ~a" url destpath)
         (log2:trace "Command: ~a" command)
         (uiop:run-program command)))))
 
