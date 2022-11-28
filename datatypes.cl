@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2022-05-29 11:30:49>
+;;; Last Modified <michael 2022-11-27 23:10:55>
 
 (in-package :cl-weather)
 
@@ -56,6 +56,9 @@
                      :format '((:year 4) (:month 2) (:day 2))
                      :timezone +utc-zone+))
 
+(defun cycle-string (cycle)
+  (format nil "~a-~2,'0d" (cycle-datestring cycle) (cycle-run cycle)))
+
 (defun-t cycle-run fixnum ((cycle cycle))
   (timestamp-hour (cycle-timestamp cycle) :timezone +utc-zone+))
 
@@ -90,7 +93,18 @@
 ;;; Interpolation parameters
 
 (defstruct iparams current previous offset)
-(defstruct params timestamp base-time forecast next-fc method merge-start merge-window info fc0 fc1 fraction)
+(defstruct params
+  timestamp
+  base-time
+  forecast
+  next-fc
+  (method :vr)
+  merge-start
+  merge-window
+  info
+  fc0
+  fc1
+  fraction)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; GRIB Info
@@ -277,14 +291,20 @@
           (error c)))))
 
 (defun interpolation-parameters (timestamp &key
-                                             method
-                                             merge-start
-                                             merge-window
+                                             (method :vr)
+                                             (gfs-mode "06h")
+                                             (merge-start 0d0)
+                                             (merge-window 0d0)
                                              (cycle (available-cycle timestamp))
                                              (resolution "1p00"))
   (log2:trace "T:~a C:~a R:~a M:~a S:~a W:~a" timestamp cycle resolution method merge-start merge-window)
   (let* ((cycle1 (or cycle (available-cycle timestamp)))
-         (cycle0 (previous-cycle cycle1))
+         (cycle0 (cond ((string= gfs-mode "06h")
+                        (previous-cycle cycle1))
+                       ((string= gfs-mode "12h")
+                        (previous-cycle (previous-cycle cycle1)))
+                       (t
+                        (error "Unsupported GFS mode ~a" gfs-mode))))
          (current (prediction-parameters timestamp
                                          :method method
                                          :merge-start merge-start
