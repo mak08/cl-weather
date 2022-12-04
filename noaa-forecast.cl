@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Access to NOAA forecasts (non-interpolated)
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-11-27 17:53:16>
+;;; Last Modified <michael 2022-11-30 22:44:54>
 
 (in-package "CL-WEATHER")
 
@@ -22,8 +22,6 @@
 (defun noaa-forecast% (&key (cycle (make-cycle)) (offset 0) (resolution "1p00"))
   (let ((filename (find-file-for-spec :cycle cycle :offset offset :resolution resolution))
         (index (codes-index-new '("step" "shortName"))))
-    (unless filename
-      (error 'missing-forecast :cycle cycle :offset offset :resolution resolution :filename filename))
     (log2:trace "Add file ~a~%" filename)
     (let ((retcode (codes-index-add-file index filename)))
       (case retcode
@@ -38,12 +36,13 @@
       (get-uv-steps-from-index index))))
 
 (defun find-file-for-spec (&key cycle offset resolution)
-  (let ((path (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
-    (if (probe-file path)
-        (namestring path)
-        (let ((path  (noaa-archivepath :cycle cycle :offset offset :resolution resolution)))
-          (if (probe-file path)
-              (namestring path))))))
+  (let ((dest-path (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
+    (if (probe-file dest-path)
+        (namestring dest-path)
+        (let ((archive-path  (noaa-archivepath :cycle cycle :offset offset :resolution resolution)))
+          (if (probe-file archive-path)
+              (namestring archive-path)
+              (error 'missing-forecast :cycle cycle :offset offset :resolution resolution :filename dest-path))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Get forecast collection for area

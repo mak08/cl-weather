@@ -1,13 +1,49 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2021-12-16 20:03:24>
+;;; Last Modified <michael 2022-11-11 22:06:29>
 
 (in-package :cl-weather)
 
 (declaim (optimize debug safety)
          #+()(ftype (function (double-float double-float) double-float)
             enorm-d))
+
+(defstruct fctile-stack north south east west cycle data)
+(defstruct fctile-data offset u-data v-data) 
+
+(defun get-wind-uv (north south west east
+                    &key
+                      (cycle (available-cycle (now)))
+                      (from-forecast 0)
+                      (to-forecast from-forecast))
+  (make-fctile-stack
+   :north north
+   :south south
+   :east east
+   :west west
+   :cycle cycle
+   :data (loop :for offset :from from-forecast :to to-forecast :by 3
+               :collect
+               (let*
+                   ((dataset (noaa-forecast :cycle cycle :offset offset))
+                    (uv (dataset-forecast dataset))
+                    (info (dataset-grib-info dataset))
+                    (result-u (make-array (list (- east west) (- north south)) :element-type 'double-float))
+                    (result-v (make-array (list (- east west) (- north south)) :element-type 'double-float)))
+                 (loop :for lat :from north :downto (+ south 1)
+                       :for lat0 :from 0
+                       :do (loop :for lon :from west :to (- east 1)
+                                 :for lon0 :from 0
+                                 :for index = (uv-index info lat lon)
+                                 :do (multiple-value-bind (u v)
+                                         (grib-get-uv uv index)
+                                       (setf (aref result-u lat0 lon0) u)
+                                       (setf (aref result-v lat0 lon0) v))))
+                 (make-fctile-data :offset offset
+                                   :u-data result-u
+                                   :v-data result-v)))))
+
 
 (defun test-wind (lat lon &key
                             (time (now))
