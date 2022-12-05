@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2022-12-04 00:15:55>
+;;; Last Modified <michael 2022-12-05 17:22:00>
 
 (in-package :cl-weather)
 
@@ -40,7 +40,7 @@
                      (cycle-string cycle)
                      resolution
                      (format nil "~3,'0d" fc)
-                     (format nil "~3,'0d" (+ lat0 90)))
+                     (format nil "~3,'0d" lat0))
     :name (format nil "~3,'0d.dat" lon0))
    tile-root-dir))
 
