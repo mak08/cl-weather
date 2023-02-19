@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2023-02-19 17:04:24>
+;;; Last Modified <michael 2023-02-19 21:54:28>
 
 (in-package :cl-weather)
 
@@ -132,6 +132,11 @@
   i-inc j-inc                   ; Grid increment in degrees 
   i-scan-neg j-scan-pos         ; Value order
   )
+(defmethod print-object ((thing gribinfo) stream)
+  (format stream "{GribInfo ~apts i-incr:~a j-incr:~a}"
+          (gribinfo-grid-size thing)
+          (gribinfo-i-inc thing)
+          (gribinfo-j-inc thing)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; ==============
@@ -317,7 +322,7 @@
                                              (source :noaa)
                                              (cycle (available-cycle timestamp))
                                              (resolution "1p00"))
-  (log2:trace-more "S:~a C:~a R:~a M:~a U:~a+~a T:~a" source cycle resolution method merge-window merge-start timestamp)
+  (log2:trace-more "S:~a C:~a R:~a M:~a U:~a+~a T:~a" source cycle resolution method merge-start merge-window timestamp)
   (let* ((cycle1 (or cycle (available-cycle timestamp)))
          (cycle0 (cond ((string= gfs-mode "06h")
                         (previous-cycle cycle1))

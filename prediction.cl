@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2023-02-19 15:30:13>
+;;; Last Modified <michael 2023-02-19 23:10:17>
 
 (declaim (optimize (speed 3) (debug 1) (space 1) (safety 1)))
 
@@ -75,7 +75,7 @@
                                0.7d0)))
             1d0)))))
 
-(declaim (inline position-interpolate))
+(declaim (notinline position-interpolate))
 (defun position-interpolate (method wlat wlng u00 u01 u10 u11 v00 v01 v10 v11)
   (let* ((wind-u (bilinear wlat wlng u00 u01 u10 u11))
          (wind-v (bilinear wlat wlng v00 v01 v10 v11))
@@ -107,7 +107,6 @@
          (merge-window (if previous (params-merge-window previous) (params-merge-window current))))
     (cond
       ((and current previous)
-       (log2:trace "Merging")
        (with-bindings (((u00 v00) (grib-get-uv cycle0-fc0 index))
                        ((u10 v10) (grib-get-uv cycle0-fc1 index))
                        ((u01 v01) (grib-get-uv cycle1-fc0 index))
@@ -121,14 +120,12 @@
                   (vz (linear d v0 v1)))
              (values uz vz)))))
       ((and previous)
-       (log2:trace "Using previous")
        (with-bindings (((u0 v0) (grib-get-uv cycle0-fc0 index))
                        ((u1 v1) (grib-get-uv cycle0-fc1 index)))
          (let ((u (linear fraction u0 u1))
                (v (linear fraction v0 v1)))
            (values u v))))
       ((and current)
-       (log2:trace "Using current (new)")
        (with-bindings (((u0 v0) (grib-get-uv cycle1-fc0 index))
                        ((u1 v1) (grib-get-uv cycle1-fc1 index)))
          (let ((u (linear fraction u0 u1))
@@ -171,6 +168,51 @@
         (time-interpolate lat lng info current offset-new previous)
       (position-interpolate method wlat wlng u00 u01 u10 u11 v00 v01 v10 v11))))
 
+
+(defun interpolate% (lat lng offset p0 p1)
+  (assert (not (and p0 p1)))
+  (let* ((p (or p0 p1))
+         (info (params-info p))
+         (i-inc (gribinfo-i-inc info))
+         (j-inc (gribinfo-j-inc info))
+
+         (lat0 (normalized-lat (* (ffloor lat j-inc) j-inc)))
+         (lng0 (normalized-lng (* (ffloor lng i-inc) i-inc)))
+         (lat1 (normalized-lat (+ lat0 j-inc)))
+         (lng1 (normalized-lng (+ lng0 i-inc)))
+
+         (wlat (/ (- (normalized-lat lat) lat0) j-inc))
+         (wlng (/ (- (normalized-lng lng) lng0) i-inc))
+         
+         (i00 (uv-index info lat0 lng0))
+         (i01 (uv-index info lat0 lng1))
+         (i10 (uv-index info lat1 lng0))
+         (i11 (uv-index info lat1 lng1))
+
+         (fraction (params-fraction p))
+         
+         (fc0 (params-fc0 p))
+         (fc1 (params-fc1 p)))
+    (with-bindings (((u0_00 v0_00) (grib-get-uv fc0 i00))
+                    ((u0_10 v0_10) (grib-get-uv fc0 i10))
+                    ((u0_01 v0_01) (grib-get-uv fc0 i01))
+                    ((u0_11 v0_11) (grib-get-uv fc0 i11))
+                    ((u1_00 v1_00) (grib-get-uv fc1 i00))
+                    ((u1_10 v1_10) (grib-get-uv fc1 i10))
+                    ((u1_01 v1_01) (grib-get-uv fc1 i01))
+                    ((u1_11 v1_11) (grib-get-uv fc1 i11)))
+      
+      (with-bindings
+          (((a0 s0) (position-interpolate :bilinear wlat wlng u0_00 u0_01 u0_10 u0_11 v0_00 v0_01 v0_10 v0_11))
+           ((a1 s1) (position-interpolate :bilinear wlat wlng u1_00 u1_01 u1_10 u1_11 v1_00 v1_01 v1_10 v1_11)))
+        (with-bindings
+            (((u0 v0) (p2c (rad a0) s0))
+             ((u1 v1) (p2c (rad a1) s1)))
+          (let ((u (linear fraction u0 u1))
+                (v (linear fraction v0 v1)))
+            (values (angle u v)
+                    (enorm u v))))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; API Functions
 
@@ -179,6 +221,12 @@
         (offset-new (iparams-offset iparams))
         (params-old (iparams-previous iparams)))
     (vr-prediction% lat lng params-new  offset-new params-old)))
+
+(defun interpolate (lat lng iparams)
+  (let ((offset (iparams-offset iparams))
+        (p0 (iparams-current iparams))
+        (p1 (iparams-previous iparams)))
+    (interpolate% lat lng offset p0 p1)))
 
 (defun vr-prediction (lat lng  &key (timestamp (now)) (cycle (make-cycle :timestamp timestamp)) (resolution "1p00"))
   (let* ((params (prediction-parameters timestamp :cycle cycle :resolution resolution)))
