@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2023-02-18 22:25:40>
+;;; Last Modified <michael 2023-02-19 17:52:17>
 
 (in-package "CL-WEATHER")
 
@@ -41,8 +41,8 @@
               (:retry
                (log2:info "Waiting ~as for ~a-~a" *retry-interval* cycle offset)
                (sleep *retry-interval*)
-               (when (> (timestamp-difference (now) (cycle-timestamp cycle)) (* 60 60 3))
-                 (log2:error "Giving up download of ~a at offset ~a" cycle offset)
+               (when (> (timestamp-difference (now) (cycle-timestamp cycle)) (* 60 60 6))
+                 (log2:error "Giving up retrying download of ~a at offset ~a" cycle offset)
                  (error "Incomplete cycle ~a" cycle))
                (go :retry))
               (:error

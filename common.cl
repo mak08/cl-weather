@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2023-02-18 23:26:18>
+;;; Last Modified <michael 2023-02-19 16:12:39>
 
 (in-package "CL-WEATHER")
 (setf (log2:log-level "cl-weather") log2:+info+)
@@ -33,9 +33,19 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Helpers
 
+(defun format-timestamp-as-cycle (stream timestamp)
+  (format-timestring nil timestamp
+                     :format '((:day 2) "T" (:hour 2))
+                     :timezone +utc-zone+ ))
+
 (defun format-yyyymmdd (stream timestamp)
   (format-timestring stream timestamp
                      :format '((:year 4) (:month 2) (:day 2))
+                     :timezone +utc-zone+))
+
+(defun format-ddhhmm (stream timestamp)
+  (format-timestring stream timestamp
+                     :format '((:day 2)"T" (:hour 2) ":" (:min 2))
                      :timezone +utc-zone+))
 
 (defun format-datetime (stream timestamp &key (timezone +utc-zone+))

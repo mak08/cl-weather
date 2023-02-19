@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2023-02-19 11:53:06>
+;;; Last Modified <michael 2023-02-19 17:04:24>
 
 (in-package :cl-weather)
 
@@ -112,11 +112,13 @@
   fc1
   fraction)
 (defmethod print-object ((thing params) stream)
-  (format stream "{B:~a T:~a F0:~a F1:~a}"
-          (format-datetime nil (params-base-time thing))
-          (format-datetime nil (params-timestamp thing))
+  (format stream "{PARAMS B:~a T:~a F0:~a F1:~a M:~a+~a}"
+          (format-timestamp-as-cycle nil (params-base-time thing))
+          (format-ddhhmm nil (params-timestamp thing))
           (params-fc0 thing)
-          (params-fc1 thing)))
+          (params-fc1 thing)
+          (params-merge-start thing)
+          (params-merge-window thing)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -147,7 +149,7 @@
 
 (defmethod print-object ((thing forecast) stream)
   (let ((cycle (dataset-cycle (fc-dataset thing))))
-    (format stream "{Forecast @ ~a, Offset ~a, Cycle ~a|~a}"
+    (format stream "{FC @ ~a, Offset ~a, Cycle ~a|~a}"
             (format-datetime nil (fc-time thing))
             (fc-offset thing)
             (cycle-datestring cycle)
@@ -169,10 +171,10 @@
   (adjust-timestamp (dataset-basetime (uv-dataset uv)) (offset :minute (uv-offset uv))))
 
 (defmethod print-object ((thing uv) stream)
-  (format stream "{forecast cycle=~a offset=~a time=~a step=~a}"
-          (format-datetime nil (uv-cycle thing))
+  (format stream "{UV C=~a O=~a T=~a step=~a}"
+          (format-timestamp-as-cycle nil (uv-cycle thing))
           (uv-offset thing)
-          (format-datetime nil (uv-forecast-time thing))
+          (format-ddhhmm nil (uv-forecast-time thing))
           (uv-step thing)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -315,7 +317,7 @@
                                              (source :noaa)
                                              (cycle (available-cycle timestamp))
                                              (resolution "1p00"))
-  (log2:trace "S:~a C:~a R:~a M:~a U:~a+~a T:~a" source cycle resolution method merge-window merge-start timestamp)
+  (log2:trace-more "S:~a C:~a R:~a M:~a U:~a+~a T:~a" source cycle resolution method merge-window merge-start timestamp)
   (let* ((cycle1 (or cycle (available-cycle timestamp)))
          (cycle0 (cond ((string= gfs-mode "06h")
                         (previous-cycle cycle1))
@@ -323,8 +325,10 @@
                         (previous-cycle (previous-cycle cycle1)))
                        (t
                         (error "Unsupported GFS mode ~a" gfs-mode))))
+         (merge-start-ts (adjust-timestamp (cycle-timestamp cycle1) (offset :minute (round (* merge-start 60)))))
+         (merge-end-ts  (adjust-timestamp merge-start-ts (offset :minute (round (* merge-window 60)))))
          (offset (cycle-offset cycle1 timestamp))
-         (current (when (>= offset merge-start)
+         (current (when (timestamp>= timestamp merge-start-ts)
                     (prediction-parameters timestamp
                                            :method method
                                            :merge-start merge-start
@@ -333,7 +337,7 @@
                                            :cycle cycle1
                                            :resolution resolution)))
 
-         (previous (when  (<= offset (+ merge-start merge-window))
+         (previous (when  (timestamp< timestamp merge-end-ts)
                      (prediction-parameters timestamp
                                             :method method
                                             :merge-start merge-start

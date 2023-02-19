@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2023-02-19 12:57:54>
+;;; Last Modified <michael 2023-02-19 17:42:52>
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -25,12 +25,30 @@
   (download-cycle (previous-cycle (available-cycle (now))) :resolution resolution)
   (vr-download-cycle (previous-cycle (available-cycle (now))) :max-offset 288)
   ;; Download the latest complete cycle
-  (download-cycle (latest-complete-cycle) :resolution resolution :max-offset max-offset)
-  (vr-download-cycle (latest-complete-cycle) :max-offset 288)
+  (let ((noaa-update
+          (bordeaux-threads:make-thread
+           (lambda ()
+             (download-cycle (latest-complete-cycle) :resolution resolution :max-offset max-offset))
+           :name "NOAA-UPDATE"))
+        (vr-update
+          (bordeaux-threads:make-thread
+           (lambda ()
+             (vr-download-cycle (latest-complete-cycle) :max-offset 288))
+                   :name "VR-UPDATE")))
+    (bordeaux-threads:join-thread noaa-update)
+    (bordeaux-threads:join-thread vr-update))
   ;; When a cycle is currently being output, start download immediately
   (when (cycle-updating-p)
-    (download-cycle (current-cycle) :resolution resolution :max-offset max-offset :if-missing :wait)
-    (vr-download-cycle (current-cycle) :resolution resolution :max-offset 288 :if-missing :wait))
+    (let ((noaa-update
+            (bordeaux-threads:make-thread
+             (lambda ()
+               (download-cycle (current-cycle) :resolution resolution :max-offset max-offset :if-missing :wait))
+             :name "NOAA-UPDATE"))
+          (vr-update
+            (bordeaux-threads:make-thread
+             (lambda ()
+               (vr-download-cycle (current-cycle) :max-offset 288 :if-missing :retry))
+             :name "VR-UPDATE")))))
   ;; NOW we can leave it to the 4/24 update. 
   (setf *noaa-download-timer*
         (timers:add-timer (lambda ()
@@ -40,7 +58,7 @@
                           :minutes '(30)))
   (setf *vr-download-timer*
         (timers:add-timer (lambda ()
-                            (vr-download-cycle (current-cycle) :resolution resolution :max-offset 288 :if-missing :wait))
+                            (vr-download-cycle (current-cycle) :max-offset 288 :if-missing :retry))
                           :id (format nil "GFS-~a-UPDATE-VR" resolution)
                           :hours '(3 9 15 21)
                           :minutes '(30)))

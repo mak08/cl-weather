@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2023-02-19 13:53:52>
+;;; Last Modified <michael 2023-02-19 15:30:13>
 
 (declaim (optimize (speed 3) (debug 1) (space 1) (safety 1)))
 
@@ -106,16 +106,8 @@
          (merge-start (if previous (params-merge-start previous) (params-merge-start current)))
          (merge-window (if previous (params-merge-window previous) (params-merge-window current))))
     (cond
-      ((and previous
-            (< offset merge-start))
-       (with-bindings (((u0 v0) (grib-get-uv cycle0-fc0 index))
-                       ((u1 v1) (grib-get-uv cycle0-fc1 index)))
-         (let ((u (linear fraction u0 u1))
-               (v (linear fraction v0 v1)))
-           (values u v))))
-      ((and previous
-            (> merge-window 0)
-            (<= merge-start offset (+ merge-start merge-window)))
+      ((and current previous)
+       (log2:trace "Merging")
        (with-bindings (((u00 v00) (grib-get-uv cycle0-fc0 index))
                        ((u10 v10) (grib-get-uv cycle0-fc1 index))
                        ((u01 v01) (grib-get-uv cycle1-fc0 index))
@@ -128,12 +120,22 @@
            (let* ((uz (linear d u0 u1))
                   (vz (linear d v0 v1)))
              (values uz vz)))))
-      (T
+      ((and previous)
+       (log2:trace "Using previous")
+       (with-bindings (((u0 v0) (grib-get-uv cycle0-fc0 index))
+                       ((u1 v1) (grib-get-uv cycle0-fc1 index)))
+         (let ((u (linear fraction u0 u1))
+               (v (linear fraction v0 v1)))
+           (values u v))))
+      ((and current)
+       (log2:trace "Using current (new)")
        (with-bindings (((u0 v0) (grib-get-uv cycle1-fc0 index))
                        ((u1 v1) (grib-get-uv cycle1-fc1 index)))
          (let ((u (linear fraction u0 u1))
                (v (linear fraction v0 v1)))
-           (values u v)))))))
+           (values u v))))
+      (T
+       (error "Have neither current nor previous")))))
 
 (declaim (inline time-interpolate))
 (defun time-interpolate (lat lng info current offset-new previous)
