@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2022-11-27 23:10:55>
+;;; Last Modified <michael 2023-02-19 11:53:06>
 
 (in-package :cl-weather)
 
@@ -51,10 +51,16 @@
          (cycle-seconds (* 6 3600 (floor seconds (* 6 3600)))))
     (make-cycle% :timestamp (unix-to-timestamp cycle-seconds))))
 
+(defun cycle-offset (cycle timestamp)
+  (*  3
+      (floor
+       (truncate (timestamp-difference timestamp
+                                       (cycle-timestamp cycle))
+                 3600)
+       3)))
+
 (defun-t cycle-datestring string ((cycle cycle))
-  (format-timestring nil (cycle-timestamp cycle)
-                     :format '((:year 4) (:month 2) (:day 2))
-                     :timezone +utc-zone+))
+  (format-yyyymmdd nil (cycle-timestamp cycle)))
 
 (defun cycle-string (cycle)
   (format nil "~a-~2,'0d" (cycle-datestring cycle) (cycle-run cycle)))
@@ -105,6 +111,13 @@
   fc0
   fc1
   fraction)
+(defmethod print-object ((thing params) stream)
+  (format stream "{B:~a T:~a F0:~a F1:~a}"
+          (format-datetime nil (params-base-time thing))
+          (format-datetime nil (params-timestamp thing))
+          (params-fc0 thing)
+          (params-fc1 thing)))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; GRIB Info
@@ -216,7 +229,9 @@
   (aref (dataset-forecasts dataset) 0))
 
 (defun forecast-fraction (fc0 fc1 timestamp)
-  (duration-fraction  (uv-forecast-time fc0) (uv-forecast-time fc1) timestamp))
+  (duration-fraction (uv-forecast-time fc0)
+                     (uv-forecast-time fc1)
+                     timestamp))
 
 (defun duration-fraction (ts0 ts1 ts)
   (let ((delta (timestamp-difference ts1 ts0))
@@ -252,6 +267,7 @@
                                           method
                                           merge-start
                                           merge-window
+                                          (source :noaa)
                                           (cycle (available-cycle timestamp))
                                           (resolution "1p00")
                                           (retry 1))
@@ -262,8 +278,8 @@
   (handler-case
       (let* ((forecast (cycle-forecast cycle timestamp))
              (next-fc (next-forecast forecast))
-             (ds0 (noaa-forecast :cycle cycle :offset forecast :resolution resolution))
-             (ds1 (noaa-forecast :cycle cycle :offset next-fc :resolution resolution))
+             (ds0 (load-forecast :source source :cycle cycle :offset forecast :resolution resolution))
+             (ds1 (load-forecast :source source :cycle cycle :offset next-fc :resolution resolution))
              (fc0 (dataset-forecast ds0))
              (fc1 (dataset-forecast ds1))
              (fraction (forecast-fraction fc0 fc1 timestamp))
@@ -285,6 +301,7 @@
                                  :method method
                                  :merge-start merge-start
                                  :merge-window merge-window
+                                 :source source
                                  :cycle (previous-cycle cycle)
                                  :resolution resolution
                                  :retry (1- retry))
@@ -295,9 +312,10 @@
                                              (gfs-mode "06h")
                                              (merge-start 0d0)
                                              (merge-window 0d0)
+                                             (source :noaa)
                                              (cycle (available-cycle timestamp))
                                              (resolution "1p00"))
-  (log2:trace "T:~a C:~a R:~a M:~a S:~a W:~a" timestamp cycle resolution method merge-start merge-window)
+  (log2:trace "S:~a C:~a R:~a M:~a U:~a+~a T:~a" source cycle resolution method merge-window merge-start timestamp)
   (let* ((cycle1 (or cycle (available-cycle timestamp)))
          (cycle0 (cond ((string= gfs-mode "06h")
                         (previous-cycle cycle1))
@@ -305,23 +323,25 @@
                         (previous-cycle (previous-cycle cycle1)))
                        (t
                         (error "Unsupported GFS mode ~a" gfs-mode))))
-         (current (prediction-parameters timestamp
-                                         :method method
-                                         :merge-start merge-start
-                                         :merge-window merge-window
-                                         :cycle cycle1
-                                         :resolution resolution))
-         (offset (/ (timestamp-difference (params-timestamp current)
-                                          (params-base-time current))
-                    3600.0))
+         (offset (cycle-offset cycle1 timestamp))
+         (current (when (>= offset merge-start)
+                    (prediction-parameters timestamp
+                                           :method method
+                                           :merge-start merge-start
+                                           :merge-window merge-window
+                                           :source source
+                                           :cycle cycle1
+                                           :resolution resolution)))
+
          (previous (when  (<= offset (+ merge-start merge-window))
                      (prediction-parameters timestamp
                                             :method method
                                             :merge-start merge-start
                                             :merge-window merge-window
+                                            :source source
                                             :cycle cycle0
                                             :resolution resolution))))
-    (log2:trace "Current:~a  Previous: ~a" cycle1 cycle0)
+    (log2:trace "C:~a  P: ~a" current previous)
     (make-iparams :current current
                   :previous previous
                   :offset offset)))

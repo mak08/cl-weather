@@ -1,9 +1,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2022-03-19 00:19:21>
+;;; Last Modified <michael 2023-02-19 11:04:26>
 
-;;; (declaim (optimize (speed 3) (debug 0) (space 1) (safety 0)))
+(declaim (optimize (speed 3) (debug 1) (space 1) (safety 1)))
+
 
 (in-package "CL-WEATHER")
 
@@ -18,20 +19,6 @@
 ;;; -  Compute final direction d from (u, v)
 ;;;
 ;;; -  Compute s_uv = enorm(u, v)
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; API Functions
-
-(defun interpolated-prediction (lat lng iparams)
-  (let ((params-new (iparams-current iparams))
-        (offset-new (iparams-offset iparams))
-        (params-old (iparams-previous iparams)))
-    (vr-prediction% lat lng params-new  offset-new params-old)))
-
-(defun vr-prediction (lat lng  &key (timestamp (now)) (cycle (make-cycle :timestamp timestamp)) (resolution "1p00"))
-  (let* ((params (prediction-parameters timestamp :cycle cycle :resolution resolution)))
-    (vr-prediction% lat lng params nil)))
 
 (declaim (inline magnitude-factor))
 (defun-t magnitude-factor double-float
@@ -86,7 +73,7 @@
             (expt (/ speed-enorm speed-bilinear)
                   (- 1d0 (expt (bilinear (* wlat 2d0) (* wlng 2d0) c00 c01 c10 c11)
                                0.7d0)))
-            1)))))
+            1d0)))))
 
 (declaim (inline position-interpolate))
 (defun position-interpolate (method wlat wlng u00 u01 u10 u11 v00 v01 v10 v11)
@@ -109,65 +96,46 @@
                 (bilinear wlat wlng s00 s01 s10 s11)
                 (magnitude-factor wlat wlng wind-u wind-v s00 s01 s10 s11 u00 u01 u10 u11 v00 v01 v10 v11)))))))
 
-(defun vr-prediction% (lat lng current offset-new &optional previous)
-  (declare (inline normalized-lat normalized-lng uv-index time-interpolate angle bilinear enorm))
-  (let* ((info (params-info current))
-         (method (params-method current))
-         (i-inc (gribinfo-i-inc info))
-         (j-inc (gribinfo-j-inc info))
-         (lat0 (normalized-lat (* (ffloor lat j-inc) j-inc)))
-         (lng0 (normalized-lng (* (ffloor lng i-inc) i-inc)))
-         (wlat (/ (- (normalized-lat lat) lat0) j-inc))
-         (wlng (/ (- (normalized-lng lng) lng0) i-inc)))
-    (multiple-value-bind (u00 u01 u10 u11 v00 v01 v10 v11)
-        (time-interpolate lat lng info current offset-new previous)
-      (position-interpolate method wlat wlng u00 u01 u10 u11 v00 v01 v10 v11))))
-
-(declaim (inline time-interpolate-index))
+(declaim (notinline time-interpolate-index))
 (defun time-interpolate-index (index current offset previous)
-  (let* ((fraction (params-fraction current))
-         (f0c1 (params-fc0 current))
-         (f1c1 (params-fc1 current))
-         (merge-start (params-merge-start current))
-         (merge-window (params-merge-window current)))
+  (let* ((fraction (if previous (params-fraction previous) (params-fraction current)))
+         (cycle1-fc0 (when current (params-fc0 current)))
+         (cycle1-fc1 (when current (params-fc1 current)))
+         (cycle0-fc0 (when previous (params-fc0 previous)))
+         (cycle0-fc1 (when previous (params-fc1 previous)))
+         (merge-start (if previous (params-merge-start previous) (params-merge-start current)))
+         (merge-window (if previous (params-merge-window previous) (params-merge-window current))))
     (cond
       ((and previous
             (< offset merge-start))
-       (log2:trace-more "Using old, Offset ~,2,,'0,f, Fraction ~,2,,'0,f, Step ~a " offset fraction (params-forecast current))
-       (let ((f0c0 (params-fc0 previous))
-             (f1c0 (params-fc1 previous)))
-         (with-bindings (((u0 v0) (grib-get-uv f0c0 index))
-                         ((u1 v1) (grib-get-uv f1c0 index)))
-           (let ((u (linear fraction u0 u1))
-                 (v (linear fraction v0 v1)))
-             (values u v)))))
+       (with-bindings (((u0 v0) (grib-get-uv cycle0-fc0 index))
+                       ((u1 v1) (grib-get-uv cycle0-fc1 index)))
+         (let ((u (linear fraction u0 u1))
+               (v (linear fraction v0 v1)))
+           (values u v))))
       ((and previous
             (> merge-window 0)
             (<= merge-start offset (+ merge-start merge-window)))
-       (let ((f0c0 (params-fc0 previous))
-             (f1c0 (params-fc1 previous)))
-         (with-bindings (((u00 v00) (grib-get-uv f0c0 index))
-                         ((u10 v10) (grib-get-uv f1c0 index))
-                         ((u01 v01) (grib-get-uv f0c1 index))
-                         ((u11 v11) (grib-get-uv f1c1 index)))
-           (let ((u0 (linear fraction u00 u10))
-                 (v0 (linear fraction v00 v10))
-                 (u1 (linear fraction u01 u11))
-                 (v1 (linear fraction v01 v11))
-                 (d (/ (- offset merge-start) merge-window)))
-             (log2:trace-more "Merging: ~,2,,'0,f, Fraction ~,2,,'0,f, Step ~a " d fraction (params-forecast current))
-             (let* ((uz (+ (* (- 1.0 d) u0) (* d u1)))
-                    (vz (+ (* (- 1.0 d) v0) (* d v1))))
-               (values uz vz))))))
+       (with-bindings (((u00 v00) (grib-get-uv cycle0-fc0 index))
+                       ((u10 v10) (grib-get-uv cycle0-fc1 index))
+                       ((u01 v01) (grib-get-uv cycle1-fc0 index))
+                       ((u11 v11) (grib-get-uv cycle1-fc1 index)))
+         (let ((u0 (linear fraction u00 u10))
+               (v0 (linear fraction v00 v10))
+               (u1 (linear fraction u01 u11))
+               (v1 (linear fraction v01 v11))
+               (d (/ (- offset merge-start) merge-window)))
+           (let* ((uz (linear d u0 u1))
+                  (vz (linear d v0 v1)))
+             (values uz vz)))))
       (T
-       (log2:trace-more "Using new, Offset ~,2,,'0,f, Fraction ~,2,,'0,f, Step ~a " offset fraction (params-forecast current))
-       (with-bindings (((u0 v0) (grib-get-uv f0c1 index))
-                       ((u1 v1) (grib-get-uv f1c1 index)))
+       (with-bindings (((u0 v0) (grib-get-uv cycle1-fc0 index))
+                       ((u1 v1) (grib-get-uv cycle1-fc1 index)))
          (let ((u (linear fraction u0 u1))
                (v (linear fraction v0 v1)))
            (values u v)))))))
 
-(declaim (inline time-interpolate))
+(declaim (notinline time-interpolate))
 (defun time-interpolate (lat lng info current offset-new previous)
   (declare (inline grib-get-uv))
   (let* ((i-inc (gribinfo-i-inc info))
@@ -186,6 +154,33 @@
                     ((u11 v11) (time-interpolate-index i11 current offset-new previous)))
       (values u00 u01 u10 u11
               v00 v01 v10 v11))))
+
+(defun vr-prediction% (lat lng current offset-new &optional previous)
+  (declare (inline normalized-lat normalized-lng uv-index time-interpolate angle bilinear enorm))
+  (let* ((info (if previous (params-info previous) (params-info current)))
+         (method (if previous (params-method previous) (params-method current)))
+         (i-inc (gribinfo-i-inc info))
+         (j-inc (gribinfo-j-inc info))
+         (lat0 (normalized-lat (* (ffloor lat j-inc) j-inc)))
+         (lng0 (normalized-lng (* (ffloor lng i-inc) i-inc)))
+         (wlat (/ (- (normalized-lat lat) lat0) j-inc))
+         (wlng (/ (- (normalized-lng lng) lng0) i-inc)))
+    (multiple-value-bind (u00 u01 u10 u11 v00 v01 v10 v11)
+        (time-interpolate lat lng info current offset-new previous)
+      (position-interpolate method wlat wlng u00 u01 u10 u11 v00 v01 v10 v11))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; API Functions
+
+(defun interpolated-prediction (lat lng iparams)
+  (let ((params-new (iparams-current iparams))
+        (offset-new (iparams-offset iparams))
+        (params-old (iparams-previous iparams)))
+    (vr-prediction% lat lng params-new  offset-new params-old)))
+
+(defun vr-prediction (lat lng  &key (timestamp (now)) (cycle (make-cycle :timestamp timestamp)) (resolution "1p00"))
+  (let* ((params (prediction-parameters timestamp :cycle cycle :resolution resolution)))
+    (vr-prediction% lat lng params nil)))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

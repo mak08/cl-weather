@@ -1,26 +1,27 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Access to NOAA forecasts (non-interpolated)
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-11-30 22:44:54>
+;;; Last Modified <michael 2023-02-18 23:58:12>
 
 (in-package "CL-WEATHER")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Load forecast
 
-(defun noaa-forecast (&key (cycle (make-cycle)) (offset 0) (resolution "1p00"))
+(defun load-forecast (&key (source :noaa) (cycle (make-cycle)) (offset 0) (resolution "1p00"))
   "Read GRIB data into U and V arrays. Assumes the GRIB file contains U-GRD and V-GRD values"
-  (let ((key (list (cycle-datestring cycle)
+  (let ((key (list source
+                   (cycle-datestring cycle)
                    (cycle-run cycle)
                    offset
                    resolution)))
-    (bordeaux-threads:with-lock-held (+noaa-forecast-ht-lock+)
-      (or (gethash key *noaa-forecast-ht*)
-          (setf (gethash key *noaa-forecast-ht*)
-                (noaa-forecast% :cycle cycle :offset offset :resolution resolution))))))
+    (bordeaux-threads:with-lock-held (+forecast-ht-lock+)
+      (or (gethash key *forecast-ht*)
+          (setf (gethash key *forecast-ht*)
+                (load-forecast% :source source :cycle cycle :offset offset :resolution resolution))))))
 
-(defun noaa-forecast% (&key (cycle (make-cycle)) (offset 0) (resolution "1p00"))
-  (let ((filename (find-file-for-spec :cycle cycle :offset offset :resolution resolution))
+(defun load-forecast% (&key (source :noaa) (cycle (make-cycle)) (offset 0) (resolution "1p00"))
+  (let ((filename (find-file-for-spec :source source :cycle cycle :offset offset :resolution resolution))
         (index (codes-index-new '("step" "shortName"))))
     (log2:trace "Add file ~a~%" filename)
     (let ((retcode (codes-index-add-file index filename)))
@@ -35,8 +36,10 @@
            (error "eccodes: ~a: ~a" filename message))))
       (get-uv-steps-from-index index))))
 
-(defun find-file-for-spec (&key cycle offset resolution)
-  (let ((dest-path (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
+(defun find-file-for-spec (&key source cycle offset resolution)
+  (let ((dest-path (ecase source
+                     (:noaa (noaa-destpath :cycle cycle :offset offset :resolution resolution))
+                     (:vr  (vr-destpath :cycle cycle :offset offset :resolution resolution)))))
     (if (probe-file dest-path)
         (namestring dest-path)
         (let ((archive-path  (noaa-archivepath :cycle cycle :offset offset :resolution resolution)))
@@ -48,45 +51,6 @@
 ;;; Get forecast collection for area
 
 (defstruct fcdata north south west east start end increment cycle resolution values) 
-
-#|
- (with-open-file (f "/home/michael/Repository/VirtualHelm/local/wind.json" :direction :output :if-exists :supersede)
-  (json f (get-forecasts 90 0 0 90 :start 0 :end 15 :cycle (previous-cycle (available-cycle (now))))))
-|#
-
-(defun get-forecasts (north south west east &key (start 0) (end 384) (increment 1d0) (cycle (available-cycle (now))) (resolution "1p00"))
-  (let* ((data (make-array (list (1+ (truncate (- end start) 3))
-                                 (1+ (truncate (- north south) increment))
-                                 (1+ (truncate (- east west) increment))
-                                 2)
-                           :element-type 'double-float))
-         (result (make-fcdata :north north
-                              :south south
-                              :east east
-                              :west west
-                              :start start
-                              :end end
-                              :increment increment
-                              :cycle (format-datetime nil (cycle-timestamp cycle))
-                              :resolution resolution
-                              :values data)))
-    (loop
-      :for offset :from start :to end :by 3
-      :for ioffset :from 0
-      :for dataset = (noaa-forecast :cycle cycle :offset offset :resolution resolution)
-      :for forecast = (dataset-forecast dataset)
-      :for info = (dataset-grib-info dataset)
-      :do (loop
-            :for lat :from north :downto south :by increment
-            :for ilat :from 0
-            :do (loop
-                  :for lon :from west :to east :by increment
-                  :for ilon :from 0
-                  :for index = (uv-index info lat lon)
-                  :for (u v) = (multiple-value-list (grib-get-uv forecast index))
-            :do (setf (aref data ioffset ilat ilon 0) u
-                      (aref data ioffset ilat ilon 1) v))))
-    result))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Cleanup forecast HT to avoid memory exhaustion

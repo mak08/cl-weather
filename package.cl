@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2022-11-28 23:52:32>
+;;; Last Modified <michael 2023-02-18 23:24:21>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
@@ -16,10 +16,11 @@
            "+NCEP-NOMADS+"
            "+NCEP-FTPPRD+"
            "*GRIB-DIRECTORY*"
+           "*VR-GRIB-DIRECTORY*"
            "*USE-RANGE-QUERY*"
            "*MERGE-START*"
            "*MERGE-WINDOW*"
-           "NOAA-START-UPDATES"
+           "START-CYCLE-UPDATES"
            "LATEST-COMPLETE-CYCLE"
            "AVAILABLE-CYCLE"
            "CURRENT-CYCLE"
@@ -27,11 +28,12 @@
            "PREVIOUS-CYCLE"
            "DOWNLOAD-LATEST-CYCLE"
            "DOWNLOAD-CYCLE"
+           "VR-DOWNLOAD-CYCLE"
            "CLEANUP-CYCLES"
            "DATASET-BASETIME"
            "DATASET-CYCLE"
            "DATASET-TIME"
-           "NOAA-FORECAST"
+           "LOAD-FORECAST"
 
            "CYCLE"
            "CYCLE-TIMESTAMP"

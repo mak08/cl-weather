@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2022-07-09 15:31:09>
+;;; Last Modified <michael 2023-02-18 20:12:19>
 
 (in-package "CL-WEATHER")
 
@@ -98,7 +98,7 @@
     (ensure-directories-exist destpath)
     (cond
       ((and (probe-file destpath)
-            (noaa-file-complete-p destpath))
+            (grib-file-complete-p destpath))
        (log2:info "File exists: ~a" destpath)
        (values nil))
       (t
@@ -245,7 +245,7 @@
          (destpath (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
     (cond
       ((and (probe-file destpath)
-            (noaa-file-complete-p destpath))
+            (grrib-file-complete-p destpath))
        (log2:trace "File exists: ~a ~a" destpath cycle))
       (t
        (when (probe-file destpath)
@@ -257,7 +257,7 @@
          (declare (ignore out error-out))
          (case status
            (0
-            (unless (noaa-file-complete-p destpath)
+            (unless (grib-file-complete-p destpath)
               (log2:warning  "Deleting ~a (short file), giving up." destpath)
               (uiop:delete-file-if-exists destpath)
               (error "Forecast ~a:~a short file, not available yet?" cycle spec)))
@@ -265,7 +265,7 @@
             (error "cURL error ~a" status))))))
     destpath))
 
-(defun noaa-file-complete-p (destpath)
+(defun grib-file-complete-p (destpath)
   (with-open-file (f destpath :element-type 'character :external-format :utf-8)
     (let* ((length
             (file-length f))
@@ -287,7 +287,7 @@
       (grib2-range-uv10 cycle offset destpath :resolution resolution)
       (grib2-filter-uv10 cycle offset destpath :resolution resolution))
   (unless (and (probe-file destpath)
-               (noaa-file-complete-p destpath))
+               (grib-file-complete-p destpath))
     (error 'download-incomplete :cycle cycle :offset offset :destpath destpath)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

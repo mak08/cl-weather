@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2022-12-05 17:22:00>
+;;; Last Modified <michael 2023-02-18 23:53:54>
 
 (in-package :cl-weather)
 
@@ -32,8 +32,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Aux functions
-
+ 
 (defun tile-filename (cycle resolution fc lat0 lon0 &key (tile-root-dir *tile-root-dir*))
+  ;; TILE-FILENAME must match the URI used by the web client!
+  ;; Otherwise the URI -> path mapping needs to be reproduced in the try_files directive!
   (merge-pathnames
    (make-pathname
     :directory (list :relative
@@ -191,7 +193,7 @@
                :with numlon = (1+ (truncate (- east west) increment))
                :collect
                (let*
-                   ((dataset (noaa-forecast :cycle cycle :offset offset :resolution resolution))
+                   ((dataset (load-forecast :cycle cycle :offset offset :resolution resolution))
                     (uv (dataset-forecast dataset))
                     (info (dataset-grib-info dataset))
                     (result-u (make-array (list numlat numlon) :element-type 'double-float))
