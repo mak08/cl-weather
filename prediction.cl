@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2023-02-19 11:04:26>
+;;; Last Modified <michael 2023-02-19 13:53:52>
 
 (declaim (optimize (speed 3) (debug 1) (space 1) (safety 1)))
 
@@ -96,7 +96,7 @@
                 (bilinear wlat wlng s00 s01 s10 s11)
                 (magnitude-factor wlat wlng wind-u wind-v s00 s01 s10 s11 u00 u01 u10 u11 v00 v01 v10 v11)))))))
 
-(declaim (notinline time-interpolate-index))
+(declaim (inline time-interpolate-index))
 (defun time-interpolate-index (index current offset previous)
   (let* ((fraction (if previous (params-fraction previous) (params-fraction current)))
          (cycle1-fc0 (when current (params-fc0 current)))
@@ -135,7 +135,7 @@
                (v (linear fraction v0 v1)))
            (values u v)))))))
 
-(declaim (notinline time-interpolate))
+(declaim (inline time-interpolate))
 (defun time-interpolate (lat lng info current offset-new previous)
   (declare (inline grib-get-uv))
   (let* ((i-inc (gribinfo-i-inc info))
