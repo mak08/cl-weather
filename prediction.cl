@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2023-02-20 16:36:36>
+;;; Last Modified <michael 2023-02-20 16:54:40>
 
 (declaim (optimize (speed 3) (debug 1) (space 1) (safety 1)))
 
@@ -170,7 +170,7 @@
 
 
 (defun interpolate% (method lat lng offset p0 p1)
-  (assert (not (and p0 p1)))
+  ;; (assert (not (and p0 p1)))
   (let* ((p (or p0 p1))
          (info (params-info p))
          (i-inc (gribinfo-i-inc info))
