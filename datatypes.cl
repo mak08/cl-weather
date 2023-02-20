@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2023-02-19 21:54:28>
+;;; Last Modified <michael 2023-02-20 12:22:38>
 
 (in-package :cl-weather)
 
@@ -99,6 +99,10 @@
 ;;; Interpolation parameters
 
 (defstruct iparams current previous offset)
+(defun iparams-method (iparams)
+  (if (iparams-current iparams)
+      (params-method  (iparams-current iparams))
+      (params-method  (iparams-previous iparams))))
 (defstruct params
   timestamp
   base-time
@@ -112,9 +116,9 @@
   fc1
   fraction)
 (defmethod print-object ((thing params) stream)
-  (format stream "{PARAMS B:~a T:~a F0:~a F1:~a M:~a+~a}"
-          (format-timestamp-as-cycle nil (params-base-time thing))
+  (format stream "{PARAMS T:~a C:~a F0:~a F1:~a M:~a+~a}"
           (format-ddhhmm nil (params-timestamp thing))
+          (format-timestamp-as-cycle nil (params-base-time thing))
           (params-fc0 thing)
           (params-fc1 thing)
           (params-merge-start thing)
@@ -285,12 +289,17 @@
   (handler-case
       (let* ((forecast (cycle-forecast cycle timestamp))
              (next-fc (next-forecast forecast))
-             (ds0 (load-forecast :source source :cycle cycle :offset forecast :resolution resolution))
-             (ds1 (load-forecast :source source :cycle cycle :offset next-fc :resolution resolution))
+             (ds0 (if (and (eq source :vr) (< forecast 9))
+                      (load-forecast :source source :cycle (previous-cycle cycle) :offset (+ forecast 6) :resolution resolution)
+                      (load-forecast :source source :cycle cycle :offset forecast :resolution resolution)))
+             (ds1  (if (and (eq source :vr) (< next-fc 9))
+                       (load-forecast :source source :cycle (previous-cycle cycle) :offset (+ next-fc 6) :resolution resolution)
+                       (load-forecast :source source :cycle cycle :offset next-fc :resolution resolution)))
              (fc0 (dataset-forecast ds0))
              (fc1 (dataset-forecast ds1))
              (fraction (forecast-fraction fc0 fc1 timestamp))
              (info (dataset-grib-info ds0)))
+        (log2:trace "next-fc ~a method ~a" next-fc method)
         (make-params :info info
                      :timestamp timestamp
                      :base-time (cycle-timestamp cycle)
@@ -303,16 +312,18 @@
                      :fc1 fc1
                      :fraction fraction))
     (missing-forecast (c)
-      (if (> retry 0)
-          (prediction-parameters timestamp
-                                 :method method
-                                 :merge-start merge-start
-                                 :merge-window merge-window
-                                 :source source
-                                 :cycle (previous-cycle cycle)
-                                 :resolution resolution
-                                 :retry (1- retry))
-          (error c)))))
+      (progn
+        (log2:error "~a"c)
+        (if (> retry 0)
+            (prediction-parameters timestamp
+                                   :method method
+                                   :merge-start merge-start
+                                   :merge-window merge-window
+                                   :source source
+                                   :cycle (previous-cycle cycle)
+                                   :resolution resolution
+                                   :retry (1- retry))
+            (error c))))))
 
 (defun interpolation-parameters (timestamp &key
                                              (method :vr)
@@ -333,7 +344,9 @@
          (merge-start-ts (adjust-timestamp (cycle-timestamp cycle1) (offset :minute (round (* merge-start 60)))))
          (merge-end-ts  (adjust-timestamp merge-start-ts (offset :minute (round (* merge-window 60)))))
          (offset (cycle-offset cycle1 timestamp))
-         (current (when (timestamp>= timestamp merge-start-ts)
+         (current (when (or
+                         (eq source :vr)
+                         (timestamp>= timestamp merge-start-ts))
                     (prediction-parameters timestamp
                                            :method method
                                            :merge-start merge-start
@@ -342,7 +355,9 @@
                                            :cycle cycle1
                                            :resolution resolution)))
 
-         (previous (when  (timestamp< timestamp merge-end-ts)
+         (previous (when
+                       (and (not (eq source :vr))
+                            (timestamp< timestamp merge-end-ts))
                      (prediction-parameters timestamp
                                             :method method
                                             :merge-start merge-start

@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2023-02-18 23:24:21>
+;;; Last Modified <michael 2023-02-20 15:53:03>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
@@ -50,16 +50,17 @@
            "IPARAMS-CURRENT"
            "BASE-TIME"
            "IPARAMS-EFFECTIVE-CYCLE"
-           
+
            "TIMESPEC-TO-TIMESTAMP"
            "TIMESTAMP-TO-TIMESPEC"
-           
+
            "NOAA-PREDICTION%"
            "NOAA-PREDICTION"
            "VR-PREDICTION%"
            "VR-PREDICTION"
            "INTERPOLATION-PARAMETERS"
            "INTERPOLATED-PREDICTION"
+           "INTERPOLATE"
 
            "TILE-FILENAME"
            "CREATE-TILES"
