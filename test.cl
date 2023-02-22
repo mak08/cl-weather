@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2023-02-19 22:56:13>
+;;; Last Modified <michael 2023-02-22 20:49:38>
 
 (in-package :cl-weather)
 
@@ -9,8 +9,42 @@
          #+()(ftype (function (double-float double-float) double-float)
             enorm-d))
 
+(setf cl-weather:*vr-grib-directory* "/home/michael/Wetter/vr/")
+
+#|
+(test-wind-n #p[035°02'50"N 034°24'50"E]
+             :source :vr
+             :method :enorm
+             :resolution "0p25"
+             :time (parse-timestring "2023-02-20T01:20:00Z")
+             :cycle (make-cycle
+                     :timestamp (parse-timestring "2023-02-19T12:00:00Z")))
+|#
 
 (defun test-wind (latlng
+                  &key
+                    (time (now))
+                    (source :noaa)
+                    (method :bilinear)
+                    (merge-start 6.0d0)
+                    (merge-window 0.0d0)
+                    (cycle (available-cycle time))
+                    (resolution "1p00"))
+  (let* ((lat (latlng-lat latlng))
+         (lon (latlng-lng latlng))
+         (iparams
+           (interpolate time
+                        :source source
+                        :method method
+                        :merge-start merge-start
+                        :merge-window merge-window
+                        :cycle cycle
+                        :resolution resolution)))
+    (multiple-value-bind (dir speed)
+        (interpolate lat lon iparams)
+      (format t "~6,2f° ~6,2fkn" dir (m/s-to-knots speed)))))
+
+(defun test-wind-old (latlng
                   &key
                     (time (now))
                     (source :noaa)
@@ -31,29 +65,6 @@
                                      :resolution resolution)))
     (multiple-value-bind (dir speed)
         (interpolated-prediction lat lon iparams)
-      (format t "~6,2f° ~6,2fkn" dir (m/s-to-knots speed)))))
-
-(defun test-wind-n (latlng
-                  &key
-                    (time (now))
-                    (source :noaa)
-                    (method :bilinear)
-                    (merge-start 6.0d0)
-                    (merge-window 0.0d0)
-                    (cycle (available-cycle time))
-                    (resolution "1p00"))
-  (let* ((lat (latlng-lat latlng))
-         (lon (latlng-lng latlng))
-         (iparams
-           (interpolation-parameters time
-                                     :method method
-                                     :merge-start merge-start
-                                     :merge-window merge-window
-                                     :source source
-                                     :cycle cycle
-                                     :resolution resolution)))
-    (multiple-value-bind (dir speed)
-        (interpolate lat lon iparams)
       (format t "~6,2f° ~6,2fkn" dir (m/s-to-knots speed)))))
 
 (defun test-forecast-fraction (&key (timestamp (now)) (cycle))

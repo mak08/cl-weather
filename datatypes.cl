@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2023-02-20 12:22:38>
+;;; Last Modified <michael 2023-02-21 23:07:12>
 
 (in-package :cl-weather)
 
@@ -116,9 +116,10 @@
   fc1
   fraction)
 (defmethod print-object ((thing params) stream)
-  (format stream "{PARAMS T:~a C:~a F0:~a F1:~a M:~a+~a}"
+  (format stream "{PARAMS T:~a C:~a F:~,2f F0:~a F1:~a M:~a+~a}"
           (format-ddhhmm nil (params-timestamp thing))
           (format-timestamp-as-cycle nil (params-base-time thing))
+          (params-fraction thing)
           (params-fc0 thing)
           (params-fc1 thing)
           (params-merge-start thing)
@@ -180,10 +181,9 @@
   (adjust-timestamp (dataset-basetime (uv-dataset uv)) (offset :minute (uv-offset uv))))
 
 (defmethod print-object ((thing uv) stream)
-  (format stream "{UV C=~a O=~a T=~a step=~a}"
-          (format-timestamp-as-cycle nil (uv-cycle thing))
-          (uv-offset thing)
+  (format stream "{UV T=~a C=~a n=~a}"
           (format-ddhhmm nil (uv-forecast-time thing))
+          (format-timestamp-as-cycle nil (uv-cycle thing))
           (uv-step thing)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -233,16 +233,20 @@
        (lonpoints (gribinfo-lon-points info))
        (lat-offset (* lat-index lonpoints))
        (uv-index (+ lat-offset lon-index)))
-    ;; (log2:trace "Lat: ~a Lng: ~a Index: ~a" lat lon uv-index)
+    (log2:trace "Lat: ~a Lng: ~a Index: ~a" lat lon uv-index)
     uv-index))
 
 (defun dataset-forecast (dataset)
   (aref (dataset-forecasts dataset) 0))
 
 (defun forecast-fraction (fc0 fc1 timestamp)
-  (duration-fraction (uv-forecast-time fc0)
-                     (uv-forecast-time fc1)
-                     timestamp))
+  (let ((fraction
+          (duration-fraction (uv-forecast-time fc0)
+                             (uv-forecast-time fc1)
+                             timestamp)))
+    (log2:trace "fc0:~a fc1:~a Fraction: ~a" fc0 fc1 fraction)
+    fraction))
+    
 
 (defun duration-fraction (ts0 ts1 ts)
   (let ((delta (timestamp-difference ts1 ts0))
@@ -258,6 +262,7 @@
 (defun grib-get-uv (uv index)
   (let ((u (aref (uv-u-array uv) index))
         (v (aref (uv-v-array uv) index)))
+    (declare ((array double-float *) uv-u-array uv-v-array))
     ;;(log2:trace "~a => ~,2,,'0,f,~,2,,'0,f" index (angle u v) (enorm u v))
     (values u v)))
 ;; (declaim (notinline grib-get-uv))
