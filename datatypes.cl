@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2023-02-21 23:07:12>
+;;; Last Modified <michael 2023-03-04 20:59:19>
 
 (in-package :cl-weather)
 
@@ -103,6 +103,7 @@
   (if (iparams-current iparams)
       (params-method  (iparams-current iparams))
       (params-method  (iparams-previous iparams))))
+
 (defstruct params
   timestamp
   base-time
@@ -110,11 +111,13 @@
   next-fc
   (method :vr)
   merge-start
-  merge-window
+  merge-duration
+  merge-fraction
   info
   fc0
   fc1
   fraction)
+
 (defmethod print-object ((thing params) stream)
   (format stream "{PARAMS T:~a C:~a F:~,2f F0:~a F1:~a M:~a+~a}"
           (format-ddhhmm nil (params-timestamp thing))
@@ -123,7 +126,7 @@
           (params-fc0 thing)
           (params-fc1 thing)
           (params-merge-start thing)
-          (params-merge-window thing)))
+          (params-merge-duration thing)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -282,7 +285,8 @@
 (defun prediction-parameters (timestamp &key
                                           method
                                           merge-start
-                                          merge-window
+                                          merge-duration
+                                          merge-fraction
                                           (source :noaa)
                                           (cycle (available-cycle timestamp))
                                           (resolution "1p00")
@@ -310,7 +314,8 @@
                      :base-time (cycle-timestamp cycle)
                      :method method
                      :merge-start merge-start
-                     :merge-window merge-window
+                     :merge-duration merge-duration
+                     :merge-fraction merge-fraction
                      :forecast forecast
                      :next-fc next-fc
                      :fc0 fc0
@@ -323,7 +328,7 @@
             (prediction-parameters timestamp
                                    :method method
                                    :merge-start merge-start
-                                   :merge-window merge-window
+                                   :merge-duration merge-duration
                                    :source source
                                    :cycle (previous-cycle cycle)
                                    :resolution resolution
@@ -334,11 +339,11 @@
                                              (method :vr)
                                              (gfs-mode "06h")
                                              (merge-start 0d0)
-                                             (merge-window 0d0)
+                                             (merge-duration 0d0)
                                              (source :noaa)
                                              (cycle (available-cycle timestamp))
                                              (resolution "1p00"))
-  (log2:trace-more "S:~a C:~a R:~a M:~a U:~a+~a T:~a" source cycle resolution method merge-start merge-window timestamp)
+  (log2:trace-more "S:~a C:~a R:~a M:~a U:~a+~a T:~a" source cycle resolution method merge-start merge-duration timestamp)
   (let* ((cycle1 (or cycle (available-cycle timestamp)))
          (cycle0 (cond ((string= gfs-mode "06h")
                         (previous-cycle cycle1))
@@ -347,29 +352,33 @@
                        (t
                         (error "Unsupported GFS mode ~a" gfs-mode))))
          (merge-start-ts (adjust-timestamp (cycle-timestamp cycle1) (offset :minute (round (* merge-start 60)))))
-         (merge-end-ts  (adjust-timestamp merge-start-ts (offset :minute (round (* merge-window 60)))))
+         (merge-end-ts  (adjust-timestamp merge-start-ts (offset :minute (round (* merge-duration 60)))))
+         (merge-duration (timestamp-difference merge-end-ts merge-start-ts))
+         (merge-fraction (coerce (/ (timestamp-difference timestamp merge-start-ts) merge-duration) 'double-float))
          (offset (cycle-offset cycle1 timestamp))
          (current (when (or
                          (eq source :vr)
                          (timestamp>= timestamp merge-start-ts))
                     (prediction-parameters timestamp
                                            :method method
-                                           :merge-start merge-start
-                                           :merge-window merge-window
+                                           :merge-fraction merge-fraction
                                            :source source
                                            :cycle cycle1
                                            :resolution resolution)))
-
+         
          (previous (when
                        (and (not (eq source :vr))
                             (timestamp< timestamp merge-end-ts))
                      (prediction-parameters timestamp
                                             :method method
-                                            :merge-start merge-start
-                                            :merge-window merge-window
+                                            :merge-fraction merge-fraction
                                             :source source
                                             :cycle cycle0
                                             :resolution resolution))))
+    (when (and current previous)
+      (log2:trace "Merging ~a ~a ~a ~a" timestamp merge-start-ts merge-duration merge-fraction))
+
+    (log2:trace "S:~a  E: ~a" merge-start-ts merge-end-ts)
     (log2:trace "C:~a  P: ~a" current previous)
     (make-iparams :current current
                   :previous previous

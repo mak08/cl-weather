@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2023-02-22 20:47:07>
+;;; Last Modified <michael 2023-03-04 21:05:24>
 
 (declaim (optimize (speed 3) (debug 1) (space 1) (safety 1)))
 
@@ -103,10 +103,10 @@
          (cycle1-fc1 (when current (params-fc1 current)))
          (cycle0-fc0 (when previous (params-fc0 previous)))
          (cycle0-fc1 (when previous (params-fc1 previous)))
-         (merge-start (if previous (params-merge-start previous) (params-merge-start current)))
-         (merge-window (if previous (params-merge-window previous) (params-merge-window current))))
+         (merge-fraction (if previous (params-merge-fraction previous) (params-merge-fraction current))))
     (cond
-      ((and current previous)
+      ((and current
+            previous)
        (with-bindings (((u00 v00) (grib-get-uv cycle0-fc0 index))
                        ((u10 v10) (grib-get-uv cycle0-fc1 index))
                        ((u01 v01) (grib-get-uv cycle1-fc0 index))
@@ -114,18 +114,17 @@
          (let ((u0 (linear fraction u00 u10))
                (v0 (linear fraction v00 v10))
                (u1 (linear fraction u01 u11))
-               (v1 (linear fraction v01 v11))
-               (d (/ (- offset merge-start) merge-window)))
-           (let* ((uz (linear d u0 u1))
-                  (vz (linear d v0 v1)))
+               (v1 (linear fraction v01 v11)))
+           (let* ((uz (linear merge-fraction u0 u1))
+                  (vz (linear merge-fraction v0 v1)))
              (values uz vz)))))
-      ((and previous)
+      (previous
        (with-bindings (((u0 v0) (grib-get-uv cycle0-fc0 index))
                        ((u1 v1) (grib-get-uv cycle0-fc1 index)))
          (let ((u (linear fraction u0 u1))
                (v (linear fraction v0 v1)))
            (values u v))))
-      ((and current)
+      (current
        (with-bindings (((u0 v0) (grib-get-uv cycle1-fc0 index))
                        ((u1 v1) (grib-get-uv cycle1-fc1 index)))
          (let ((u (linear fraction u0 u1))
@@ -167,7 +166,6 @@
     (multiple-value-bind (u00 u01 u10 u11 v00 v01 v10 v11)
         (time-interpolate lat lng info current offset-new previous)
       (position-interpolate method wlat wlng u00 u01 u10 u11 v00 v01 v10 v11))))
-
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
