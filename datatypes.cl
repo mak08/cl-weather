@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2023-03-04 20:59:19>
+;;; Last Modified <michael 2023-03-05 13:20:18>
 
 (in-package :cl-weather)
 
@@ -354,7 +354,9 @@
          (merge-start-ts (adjust-timestamp (cycle-timestamp cycle1) (offset :minute (round (* merge-start 60)))))
          (merge-end-ts  (adjust-timestamp merge-start-ts (offset :minute (round (* merge-duration 60)))))
          (merge-duration (timestamp-difference merge-end-ts merge-start-ts))
-         (merge-fraction (coerce (/ (timestamp-difference timestamp merge-start-ts) merge-duration) 'double-float))
+         (merge-fraction (if (= merge-duration 0)
+                             0d0
+                             (coerce (/ (timestamp-difference timestamp merge-start-ts) merge-duration) 'double-float)))
          (offset (cycle-offset cycle1 timestamp))
          (current (when (or
                          (eq source :vr)
