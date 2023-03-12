@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Access to NOAA forecasts (non-interpolated)
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2023-02-19 18:01:40>
+;;; Last Modified <michael 2023-03-12 18:02:38>
 
 (in-package "CL-WEATHER")
 
@@ -81,8 +81,8 @@
            (let ((time (parse-timestring (datestring-run-to-timestamp datestring run))))
              (when (timestamp< time expiry)
                (log2:info "Removing ~a" k)
-               (remhash k cl-weather::*noaa-forecast-ht*)))))
-       *noaa-forecast-ht*))))
+               (remhash k cl-weather::*forecast-ht*)))))
+       *forecast-ht*))))
   
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
