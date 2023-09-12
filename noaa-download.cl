@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2023-02-18 20:12:19>
+;;; Last Modified <michael 2023-09-12 21:30:34>
 
 (in-package "CL-WEATHER")
 
@@ -76,20 +76,20 @@
 ;;;   Download the specified cycle. If a forecast is (still) missing, wait or abort.
 
 (defun download-cycle (cycle &key (resolution '("1p00")) (max-offset 384) (if-missing :wait))
-  (ecase (cycle-run cycle) ((or 0 6 12 18)))
-  (ecase if-missing ((or :wait :abort)))
-  (log2:info "Downloading cycle ~a using ~a" cycle (download-source-log-string))
-  (loop
-    :with start-time = (now)
-    :for count :from 1
-    :for offset :across +noaa-forecast-offsets+
-    :while (<= offset max-offset)
-    :do (loop :for res :in resolution
-              :do (progn
-                    (when (download-forecast start-time cycle offset res :if-missing if-missing)
-                      (sleep 3))))
-    :finally (return (values count cycle))))
-
+  (ignore-errors
+   (ecase (cycle-run cycle) ((or 0 6 12 18)))
+   (ecase if-missing ((or :wait :abort)))
+   (log2:info "Downloading cycle ~a using ~a" cycle (download-source-log-string))
+   (loop
+     :with start-time = (now)
+     :for count :from 1
+     :for offset :across +noaa-forecast-offsets+
+     :while (<= offset max-offset)
+     :do (loop :for res :in resolution
+               :do (progn
+                     (when (download-forecast start-time cycle offset res :if-missing if-missing)
+                       (sleep 3))))
+     :finally (return (values count cycle)))))
 
 (defun download-forecast (start-time cycle offset resolution &key (if-missing :wait))
   (log2:trace "Downloading ~a-~a using ~a" cycle offset (download-source-log-string))

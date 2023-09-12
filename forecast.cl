@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Access to NOAA forecasts (non-interpolated)
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2023-03-12 18:02:38>
+;;; Last Modified <michael 2023-04-04 01:24:59>
 
 (in-package "CL-WEATHER")
 
@@ -75,9 +75,9 @@
       (maphash
        (lambda (k v)
          (declare (ignore v))
-         (destructuring-bind (datestring run offset resolution)
+         (destructuring-bind (source datestring run offset resolution)
              k
-           (log2:info "Checking ~a-~a-~a ~a" datestring run offset resolution)
+           (log2:info "Checking ~a ~a-~a-~a ~a" source datestring run offset resolution)
            (let ((time (parse-timestring (datestring-run-to-timestamp datestring run))))
              (when (timestamp< time expiry)
                (log2:info "Removing ~a" k)
