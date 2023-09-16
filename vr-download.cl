@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2023-09-12 21:28:28>
+;;; Last Modified <michael 2023-09-16 11:44:16>
 
 (in-package "CL-WEATHER")
 
@@ -13,16 +13,20 @@
   "~a.~2,,,'0@a.~3,,,'0@a.~a.grb")
 
 (defun vr-download-cycle (cycle &key (max-offset 288) (if-missing :retry))
-  (ignore-errors 
-   (ecase (cycle-run cycle) ((or 0 6 12 18)))
-   (ecase if-missing ((or :retry :error)))
-   (log2:info "Downloading from VR ~a" cycle)
-   (loop
-     :with start-time = (now)
-     :for count :from 1
-     :for offset :from 9 :to  max-offset :by 3
-     :do (vr-download-forecast cycle offset :if-missing if-missing)
-     :finally (return (values count cycle)))))
+  (cond
+    ((null *vr-grib-directory*)
+     (log2:warning "VR grib directory not configured, not loading VR gribs"))
+    (t
+     (ignore-errors 
+      (ecase (cycle-run cycle) ((or 0 6 12 18)))
+      (ecase if-missing ((or :retry :error)))
+      (log2:info "Downloading from VR ~a" cycle)
+      (loop
+        :with start-time = (now)
+        :for count :from 1
+        :for offset :from 9 :to  max-offset :by 3
+        :do (vr-download-forecast cycle offset :if-missing if-missing)
+        :finally (return (values count cycle)))))))
 
 (defun vr-download-forecast (cycle offset &key (if-missing :retry))
   (let* ((destpath (vr-destpath :cycle cycle :offset offset :resolution "0p25"))
