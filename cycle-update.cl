@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2023-02-22 21:02:18>
+;;; Last Modified <michael 2023-12-03 01:12:10>
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -14,9 +14,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
 
-
 (defvar *noaa-download-timer*)
-(defvar *vr-download-timer*)
 (defvar *cleanup-timer*)
 
 (defun start-cycle-updates (&key (resolution '("1p00")) (max-offset 384))
@@ -26,51 +24,28 @@
           (bordeaux-threads:make-thread
            (lambda ()
              (download-cycle (previous-cycle (available-cycle (now))) :max-offset max-offset :resolution resolution))
-           :name "NOAA-UPDATE"))
-        (vr-update
-          (bordeaux-threads:make-thread
-           (lambda ()
-             (vr-download-cycle (previous-cycle (available-cycle (now))) :max-offset (min max-offset 288)))
-           :name "VR-UPDATE")))
-    (bordeaux-threads:join-thread noaa-update)
-    (bordeaux-threads:join-thread vr-update))
+           :name "NOAA-UPDATE")))
+    (bordeaux-threads:join-thread noaa-update))
   
   ;; Download the latest complete cycle
   (let ((noaa-update
           (bordeaux-threads:make-thread
            (lambda ()
              (download-cycle (latest-complete-cycle) :max-offset max-offset :resolution resolution))
-           :name "NOAA-UPDATE"))
-        (vr-update
-          (bordeaux-threads:make-thread
-           (lambda ()
-             (vr-download-cycle (latest-complete-cycle) :max-offset (min max-offset 288)))
-           :name "VR-UPDATE")))
-    (bordeaux-threads:join-thread noaa-update)
-    (bordeaux-threads:join-thread vr-update))
+           :name "NOAA-UPDATE")))
+    (bordeaux-threads:join-thread noaa-update))
   ;; When a cycle is currently being output, start download immediately
   (when (cycle-updating-p)
     (let ((noaa-update
             (bordeaux-threads:make-thread
              (lambda ()
                (download-cycle (current-cycle) :resolution resolution :max-offset max-offset :if-missing :wait))
-             :name "NOAA-UPDATE"))
-          (vr-update
-            (bordeaux-threads:make-thread
-             (lambda ()
-               (vr-download-cycle (current-cycle) :max-offset 288 :if-missing :retry))
-             :name "VR-UPDATE")))))
+             :name "NOAA-UPDATE")))))
   ;; NOW we can leave it to the 4/24 update. 
   (setf *noaa-download-timer*
         (timers:add-timer (lambda ()
                             (download-cycle (current-cycle) :resolution resolution :max-offset max-offset :if-missing :wait))
                           :id (format nil "GFS-~a-UPDATE-NOAA" resolution)
-                          :hours '(3 9 15 21)
-                          :minutes '(30)))
-  (setf *vr-download-timer*
-        (timers:add-timer (lambda ()
-                            (vr-download-cycle (current-cycle) :max-offset (min max-offset 288) :if-missing :retry))
-                          :id (format nil "GFS-~a-UPDATE-VR" resolution)
                           :hours '(3 9 15 21)
                           :minutes '(30)))
   (setf *cleanup-timer*

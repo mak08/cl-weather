@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2023-09-12 21:30:34>
+;;; Last Modified <michael 2023-12-03 16:29:22>
 
 (in-package "CL-WEATHER")
 
@@ -46,6 +46,10 @@
 (defparameter +gens-ftpprd+ "https://ftpprd.ncep.noaa.gov/data/nccf/com/gens/prod/gefs.~a/~2,,,'0@a/atmos/pgrb2ap5") ;; /gep05.t00z.pgrb2a.0p50.f756.idx
 
 (defparameter *noaa-gfs-path* +ncep-nomads+)
+
+
+(defparameter +vr-destpath-template+
+  "~a.~2,,,'0@a.~3,,,'0@a.~a.grb")
 
 (defun download-source-log-string ()
   (if *use-range-query*
@@ -96,6 +100,7 @@
   (let* ((destpath
            (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
     (ensure-directories-exist destpath)
+    (ensure-directories-exist (vr-destpath :cycle cycle :offset offset :resolution resolution))
     (cond
       ((and (probe-file destpath)
             (grib-file-complete-p destpath))
@@ -125,6 +130,7 @@
               (condition (e)
                 (log2:trace "Unexpected condition: ~a" e)
                 (go :retry))))))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Delete cycle
 
@@ -339,16 +345,24 @@
         (grib2-get-u-v-10-range index)
       (let* ((path
                (noaa-file cycle offset :resolution resolution))
+             (vr-destpath (vr-destpath :cycle cycle :offset offset :resolution resolution))
              (url
               (format nil "~a -H \"Range: bytes=~a-~a\""
                       path
                       start
                       end))
-             (command (format () "curl --max-time 480 --connect-timeout ~a ~a\ -o ~a" *connect-timeout* url destpath)))
+             (download-cmd (format () "curl --max-time 480 --connect-timeout ~a ~a\ -o ~a" *connect-timeout* url destpath))
+             (transform-cmd (create-transform-command cycle offset resolution)))
         (log2:info "Downloading ~a to ~a" url destpath)
-        (log2:trace "Command: ~a" command)
-        (uiop:run-program command)))))
+        (log2:info "Transform: ~a" transform-cmd)
+        (uiop:run-program download-cmd)
+        (uiop:run-program transform-cmd)))))
 
+(defun create-transform-command (cycle offset resolution)
+  (format () "wgrib2 ~a -set_grib_max_bits 7 -set_grib_type jpeg -grib_out ~a"
+          (noaa-destpath :cycle cycle :offset offset :resolution resolution)
+          (vr-destpath :cycle cycle :offset offset :resolution resolution)))
+  
 (defun grib2-get-index (cycle offset &key (resolution "1p00"))
   (let* ((url
            (noaa-index-file cycle offset :resolution resolution))
@@ -509,6 +523,19 @@
          (destfile 
            (format () "~a_~a.grib2" (cycle-datestring cycle) spec)))
     (file-archive-path destfile)))
+
+(defun vr-destpath (&key (cycle (make-cycle)) (offset 6) (resolution "0p25"))
+  (let* ((run (cycle-run cycle))
+         (timestamp (cycle-timestamp cycle))
+         (date (format-yyyymmdd nil timestamp))
+         (destfile 
+           (format () +vr-destpath-template+ date run offset resolution))
+         (cycle-dir
+           (make-pathname :directory (append (pathname-directory *vr-grib-directory*)
+                                             (list resolution
+                                                   (cycle-datestring cycle)
+                                                   (format nil "~2,,,'0@a" (cycle-run cycle)))))))
+    (merge-pathnames destfile cycle-dir)))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
