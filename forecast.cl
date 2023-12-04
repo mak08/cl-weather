@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Access to NOAA forecasts (non-interpolated)
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2023-04-04 01:24:59>
+;;; Last Modified <michael 2023-12-05 00:05:06>
 
 (in-package "CL-WEATHER")
 
@@ -23,7 +23,7 @@
 (defun load-forecast% (&key (source :noaa) (cycle (make-cycle)) (offset 0) (resolution "1p00"))
   (let ((filename (find-file-for-spec :source source :cycle cycle :offset offset :resolution resolution))
         (index (codes-index-new '("step" "shortName"))))
-    (log2:trace "Add file ~a~%" filename)
+    (log2:info "Loading forecast ~a~%" filename)
     (let ((retcode (codes-index-add-file index filename)))
       (case retcode
         (0)
