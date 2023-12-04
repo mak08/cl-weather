@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2023-12-03 16:29:22>
+;;; Last Modified <michael 2023-12-04 22:20:47>
 
 (in-package "CL-WEATHER")
 
@@ -125,10 +125,10 @@
             (handler-case 
                 (download-noaa-file% cycle offset destpath :resolution resolution)
               (uiop/run-program:subprocess-error (e)
-                (log2:trace "curl error: ~a" e)
+                (log2:error "curl error: ~a" e)
                 (go :retry))
               (condition (e)
-                (log2:trace "Unexpected condition: ~a" e)
+                (log2:error "Unexpected condition: ~a" e)
                 (go :retry))))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
