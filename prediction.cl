@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2023-03-04 21:05:24>
+;;; Last Modified <michael 2024-02-05 23:09:41>
 
 (declaim (optimize (speed 3) (debug 1) (space 1) (safety 1)))
 
@@ -93,8 +93,8 @@
       (:vr
        (values (angle wind-u wind-v)
                (*
-                (bilinear wlat wlng s00 s01 s10 s11)
-                (magnitude-factor wlat wlng wind-u wind-v s00 s01 s10 s11 u00 u01 u10 u11 v00 v01 v10 v11)))))))
+                ;; (magnitude-factor wlat wlng wind-u wind-v s00 s01 s10 s11 u00 u01 u10 u11 v00 v01 v10 v11)
+                (bilinear wlat wlng s00 s01 s10 s11)))))))
 
 (declaim (inline time-interpolate-index))
 (defun time-interpolate-index (index current offset previous)
