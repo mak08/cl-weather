@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2023-12-04 22:20:47>
+;;; Last Modified <michael 2024-04-28 20:12:44>
 
 (in-package "CL-WEATHER")
 
@@ -356,7 +356,8 @@
         (log2:info "Downloading ~a to ~a" url destpath)
         (log2:info "Transform: ~a" transform-cmd)
         (uiop:run-program download-cmd)
-        (uiop:run-program transform-cmd)))))
+        (when *use-gfs025-compression*
+          (uiop:run-program transform-cmd))))))
 
 (defun create-transform-command (cycle offset resolution)
   (format () "wgrib2 ~a -set_grib_max_bits 7 -set_grib_type jpeg -grib_out ~a"
