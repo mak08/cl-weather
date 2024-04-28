@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2023-02-19 16:12:39>
+;;; Last Modified <michael 2024-04-28 20:13:19>
 
 (in-package "CL-WEATHER")
 (setf (log2:log-level "cl-weather") log2:+info+)
@@ -20,6 +20,8 @@
 
 (defvar *vr-grib-directory*
   (merge-pathnames (make-pathname :directory '(:relative "weather" "vr")) *source-root*))
+
+(defvar *use-gfs025-compression* nil)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Forecast hashtable
