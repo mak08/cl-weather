@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2024-04-28 20:12:44>
+;;; Last Modified <michael 2024-05-01 19:58:44>
 
 (in-package "CL-WEATHER")
 
@@ -354,9 +354,9 @@
              (download-cmd (format () "curl --max-time 480 --connect-timeout ~a ~a\ -o ~a" *connect-timeout* url destpath))
              (transform-cmd (create-transform-command cycle offset resolution)))
         (log2:info "Downloading ~a to ~a" url destpath)
-        (log2:info "Transform: ~a" transform-cmd)
-        (uiop:run-program download-cmd)
-        (when *use-gfs025-compression*
+         (uiop:run-program download-cmd)
+        (when *generate-jpeg-compressed-gribs*
+          (log2:info "Transform: ~a" transform-cmd)
           (uiop:run-program transform-cmd))))))
 
 (defun create-transform-command (cycle offset resolution)

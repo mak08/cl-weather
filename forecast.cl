@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Access to NOAA forecasts (non-interpolated)
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2023-12-05 00:05:06>
+;;; Last Modified <michael 2024-01-28 22:40:44>
 
 (in-package "CL-WEATHER")
 
@@ -30,6 +30,21 @@
         (-11
          (log2:warning "codes-index-add-file: ~a ~a" filename retcode)
          (error 'missing-forecast :cycle cycle :offset offset :resolution resolution :filename filename))
+        (t
+         (let ((message (codes-get-error-message retcode)))
+           (log2:warning "codes-index-add-file: ~a: ~a" filename retcode)
+           (error "eccodes: ~a: ~a" filename message))))
+      (get-uv-steps-from-index index))))
+
+(defun load-grib-file (filename)
+  (let ((index (codes-index-new '("step" "shortName"))))
+    (log2:info "Loading forecast ~a~%" filename)
+    (let ((retcode (codes-index-add-file index filename)))
+      (case retcode
+        (0)
+        (-11
+         (log2:warning "codes-index-add-file: ~a ~a" filename retcode)
+         (error 'missing-forecast))
         (t
          (let ((message (codes-get-error-message retcode)))
            (log2:warning "codes-index-add-file: ~a: ~a" filename retcode)

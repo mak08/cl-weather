@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2023-03-05 13:20:18>
+;;; Last Modified <michael 2024-02-17 11:49:58>
 
 (in-package :cl-weather)
 
@@ -77,7 +77,7 @@
     date))
 
 (defmethod print-object ((thing cycle) stream)
-  (format stream "[~a ~a]" (cycle-datestring thing) (cycle-run thing))) 
+  (format stream "~a" (cycle-string thing))) 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -334,6 +334,7 @@
                                    :resolution resolution
                                    :retry (1- retry))
             (error c))))))
+
 
 (defun interpolation-parameters (timestamp &key
                                              (method :vr)
