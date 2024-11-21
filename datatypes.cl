@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2024-02-17 11:49:58>
+;;; Last Modified <michael 2024-07-01 18:36:52>
 
 (in-package :cl-weather)
 
@@ -311,7 +311,7 @@
         (log2:trace "next-fc ~a method ~a" next-fc method)
         (make-params :info info
                      :timestamp timestamp
-                     :base-time (cycle-timestamp cycle)
+                     :base-time (cycle-timestamp (if (< forecast 9) (previous-cycle cycle) cycle))
                      :method method
                      :merge-start merge-start
                      :merge-duration merge-duration
