@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2023-02-22 20:49:38>
+;;; Last Modified <michael 2024-07-25 22:27:10>
 
 (in-package :cl-weather)
 
@@ -33,16 +33,17 @@
   (let* ((lat (latlng-lat latlng))
          (lon (latlng-lng latlng))
          (iparams
-           (interpolate time
-                        :source source
-                        :method method
-                        :merge-start merge-start
-                        :merge-window merge-window
-                        :cycle cycle
-                        :resolution resolution)))
+           (interpolation-parameters 
+            time 
+            :source source
+            :method method
+            :merge-start merge-start
+            :merge-duration merge-window
+            :cycle cycle
+            :resolution resolution)))
     (multiple-value-bind (dir speed)
         (interpolate lat lon iparams)
-      (format t "~6,2f° ~6,2fkn" dir (m/s-to-knots speed)))))
+      (format nil "~6,2f° ~6,2fm/2 ~6,2fkn" dir speed (m/s-to-knots speed)))))
 
 (defun test-wind-old (latlng
                   &key
@@ -59,7 +60,7 @@
            (interpolation-parameters time
                                      :method method
                                      :merge-start merge-start
-                                     :merge-window merge-window
+                                     :merge-duration merge-window
                                      :source source
                                      :cycle cycle
                                      :resolution resolution)))
