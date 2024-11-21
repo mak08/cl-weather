@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2024-05-01 19:59:23>
+;;; Last Modified <michael 2024-05-04 14:41:44>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
@@ -20,6 +20,7 @@
            "*USE-RANGE-QUERY*"
            "*MERGE-START*"
            "*MERGE-WINDOW*"
+           "*LOAD-PREVIOUS*"
            "*GENERATE-JPEG-COMPRESSED-GRIBS*"
            "START-CYCLE-UPDATES"
            "LATEST-COMPLETE-CYCLE"
