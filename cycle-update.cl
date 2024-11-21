@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2023-12-03 01:12:10>
+;;; Last Modified <michael 2024-05-04 14:40:29>
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -17,15 +17,16 @@
 (defvar *noaa-download-timer*)
 (defvar *cleanup-timer*)
 
-(defun start-cycle-updates (&key (resolution '("1p00")) (max-offset 384))
-  ;; Force download of previous cycle - even if the latest available cycle is complete,
-  ;; previous cyclemay still be needed for interpolation.
-  (let ((noaa-update
-          (bordeaux-threads:make-thread
-           (lambda ()
-             (download-cycle (previous-cycle (available-cycle (now))) :max-offset max-offset :resolution resolution))
-           :name "NOAA-UPDATE")))
-    (bordeaux-threads:join-thread noaa-update))
+(defun start-cycle-updates (&key (resolution '("1p00")) (load-previous *load-previous*) (max-offset 384))
+  (when load-previous
+    ;; Force download of previous cycle - even if the latest available cycle is complete,
+    ;; previous cycle may still be needed for interpolation.
+    (let ((noaa-update
+            (bordeaux-threads:make-thread
+             (lambda ()
+               (download-cycle (previous-cycle (available-cycle (now))) :max-offset max-offset :resolution resolution))
+             :name "NOAA-UPDATE")))
+      (bordeaux-threads:join-thread noaa-update)))
   
   ;; Download the latest complete cycle
   (let ((noaa-update
