@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2024-07-01 18:36:52>
+;;; Last Modified <michael 2025-09-30 18:50:25>
 
 (in-package :cl-weather)
 
@@ -12,7 +12,7 @@
   ((cycle :initarg :cycle :reader cycle)
    (offset :initarg :offset :reader offset)
    (resolution :initarg :resolution :reader resolution)
-   (filename :initarg :filename :reader filename))
+   (filename :initarg :filename :reader filename :initform "<not provided>" ))
   (:report
    (lambda (c s)
      (declare (ignore c))
@@ -289,7 +289,7 @@
                                           merge-fraction
                                           (source :noaa)
                                           (cycle (available-cycle timestamp))
-                                          (resolution "1p00")
+                                          (resolution "0p25")
                                           (retry 1))
   ;; If $date is provided, $cycle must also be provided, and the specified forecast will be used.
   ;; Otherwise, the latest available forecast will be used.
