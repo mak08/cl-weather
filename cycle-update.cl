@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2024-05-04 14:40:29>
+;;; Last Modified <michael 2025-09-14 12:03:23>
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -18,30 +18,27 @@
 (defvar *cleanup-timer*)
 
 (defun start-cycle-updates (&key (resolution '("1p00")) (load-previous *load-previous*) (max-offset 384))
+  ;; Force download of previous cycle - even if the latest available cycle is complete,
+  ;; previous cycle may still be needed for interpolation.
   (when load-previous
-    ;; Force download of previous cycle - even if the latest available cycle is complete,
-    ;; previous cycle may still be needed for interpolation.
-    (let ((noaa-update
-            (bordeaux-threads:make-thread
-             (lambda ()
-               (download-cycle (previous-cycle (available-cycle (now))) :max-offset max-offset :resolution resolution))
-             :name "NOAA-UPDATE")))
-      (bordeaux-threads:join-thread noaa-update)))
+    (bordeaux-threads:make-thread
+     (lambda ()
+       (download-cycle (previous-cycle (available-cycle (now))) :max-offset max-offset :resolution resolution))
+     :name "NOAA-UPDATE"))
   
   ;; Download the latest complete cycle
-  (let ((noaa-update
-          (bordeaux-threads:make-thread
-           (lambda ()
-             (download-cycle (latest-complete-cycle) :max-offset max-offset :resolution resolution))
-           :name "NOAA-UPDATE")))
-    (bordeaux-threads:join-thread noaa-update))
+  (bordeaux-threads:make-thread
+   (lambda ()
+     (download-cycle (latest-complete-cycle) :max-offset max-offset :resolution resolution))
+   :name "NOAA-UPDATE")
+
   ;; When a cycle is currently being output, start download immediately
   (when (cycle-updating-p)
-    (let ((noaa-update
-            (bordeaux-threads:make-thread
-             (lambda ()
-               (download-cycle (current-cycle) :resolution resolution :max-offset max-offset :if-missing :wait))
-             :name "NOAA-UPDATE")))))
+    (bordeaux-threads:make-thread
+     (lambda ()
+       (download-cycle (current-cycle) :resolution resolution :max-offset max-offset :if-missing :wait))
+     :name "NOAA-UPDATE"))
+
   ;; NOW we can leave it to the 4/24 update. 
   (setf *noaa-download-timer*
         (timers:add-timer (lambda ()
