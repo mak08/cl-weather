@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2024-05-01 19:58:44>
+;;; Last Modified <michael 2025-10-04 20:58:25>
 
 (in-package "CL-WEATHER")
 
@@ -148,6 +148,8 @@
 (defun cleanup-cycles (&key (dry-run t))
   (log2:info "Deleting old forecasts")
   (let* ((pathnames (append
+                     (directory (format nil "~a/1p00/**/**/*.grb" *vr-grib-directory*))
+                     (directory (format nil "~a/0p25/**/**/*.grb" *vr-grib-directory*))
                      (directory (format nil "~a/1p00/**/**/*.grib2" *grib-directory*))
                      (directory (format nil "~a/0p25/**/**/*.grib2" *grib-directory*))))
          (yesterday (adjust-timestamp (now) (offset :day -1)))
@@ -180,23 +182,32 @@
                (rename-file path archive-path))))))))
   (when (not dry-run)
     (log2:info "Deleting empty directories")
-    (remove-empty-directories *grib-directory*)))
-
+    (remove-empty-directories *grib-directory*)
+    (remove-empty-directories *vr-grib-directory*)))
 
 (defun timestamp-from-path (path)
   (let*  ((filename (pathname-name path))
           (yyyy (subseq filename 0 4))
           (mm (subseq filename 4 6))
-          (dd (subseq filename 6 8))
-          (hh (subseq filename 14 16))
-          (date-string (format nil "~a-~a-~aT~a:00:00Z" yyyy mm dd hh)))
-    (parse-rfc3339-timestring date-string)))
+          (dd (subseq filename 6 8)))
+    (or
+     (ignore-errors
+      (let* ((hh (subseq filename 14 16))
+             (date-string (format nil "~a-~a-~aT~a:00:00Z" yyyy mm dd hh)))
+        (parse-rfc3339-timestring date-string)))
+     (ignore-errors
+      (let* ((hh (subseq filename 9 10))
+             (date-string (format nil "~a-~a-~aT~a:00:00Z" yyyy mm dd hh)))
+        (parse-rfc3339-timestring date-string))))))
 
 (defun forecast-offset-from-path (path)
-  (let*  ((filename (pathname-name path))
-          (forecast (subseq filename 30 33)))
-    (parse-integer forecast)))
-
+  (let*  ((filename (pathname-name path)))
+    (or
+     (ignore-errors
+      (parse-integer(subseq filename 30 33)))
+     (ignore-errors
+      (parse-integer(subseq filename 12 15))))))
+  
 (defun remove-empty-directories (path)
   (let ((contents (append
                    (directory
@@ -294,7 +305,7 @@
       (grib2-filter-uv10 cycle offset destpath :resolution resolution))
   (unless (and (probe-file destpath)
                (grib-file-complete-p destpath))
-    (error 'download-incomplete :cycle cycle :offset offset :destpath destpath)))
+    (error 'incomplete-download :cycle cycle :offset offset :resolution resolution :filename destpath)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Download by filter
