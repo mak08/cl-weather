@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2025-09-30 18:50:25>
+;;; Last Modified <michael 2025-10-30 23:16:20>
 
 (in-package :cl-weather)
 
@@ -119,14 +119,15 @@
   fraction)
 
 (defmethod print-object ((thing params) stream)
-  (format stream "{PARAMS T:~a C:~a F:~,2f F0:~a F1:~a M:~a+~a}"
+  (format stream "{PARAMS T:~a C:~a F:~,2f F0:~a F1:~a M:~a+~a/~a}"
           (format-ddhhmm nil (params-timestamp thing))
           (format-timestamp-as-cycle nil (params-base-time thing))
           (params-fraction thing)
           (params-fc0 thing)
           (params-fc1 thing)
           (params-merge-start thing)
-          (params-merge-duration thing)))
+          (params-merge-duration thing)
+          (params-merge-fraction thing)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -337,21 +338,15 @@
 
 
 (defun interpolation-parameters (timestamp &key
+                                             (source :noaa)
                                              (method :vr)
-                                             (gfs-mode "06h")
                                              (merge-start 0d0)
                                              (merge-duration 0d0)
-                                             (source :noaa)
                                              (cycle (available-cycle timestamp))
                                              (resolution "1p00"))
   (log2:trace-more "S:~a C:~a R:~a M:~a U:~a+~a T:~a" source cycle resolution method merge-start merge-duration timestamp)
   (let* ((cycle1 (or cycle (available-cycle timestamp)))
-         (cycle0 (cond ((string= gfs-mode "06h")
-                        (previous-cycle cycle1))
-                       ((string= gfs-mode "12h")
-                        (previous-cycle (previous-cycle cycle1)))
-                       (t
-                        (error "Unsupported GFS mode ~a" gfs-mode))))
+         (cycle0 (previous-cycle cycle1))
          (merge-start-ts (adjust-timestamp (cycle-timestamp cycle1) (offset :minute (round (* merge-start 60)))))
          (merge-end-ts  (adjust-timestamp merge-start-ts (offset :minute (round (* merge-duration 60)))))
          (merge-duration (timestamp-difference merge-end-ts merge-start-ts))
