@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2023-11-22 22:43:14>
+;;; Last Modified <michael 2025-11-01 17:31:02>
 
 (in-package "CL-WEATHER")
 
@@ -12,8 +12,8 @@
 
 (defun available-cycle (timestamp)
   ;; If $timestamp is in the future:
-  ;;   If the forecasts already available from the latest cycle  cover $timestamp,
-  ;;   return the current cycle, otherwise retunr the previous cycle.
+  ;;   If the forecasts already available from the latest cycle cover $timestamp,
+  ;;   return the current cycle, otherwise return the previous cycle.
   ;; If $timestamp is in the past, return the latest cycle that included it.
   (let* ((now (now))
          (diff (timestamp-difference timestamp now))

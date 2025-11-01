@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2025-10-30 23:16:20>
+;;; Last Modified <michael 2025-11-01 18:35:14>
 
 (in-package :cl-weather)
 
@@ -98,7 +98,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Interpolation parameters
 
-(defstruct iparams current previous offset)
+(defstruct iparams current previous offset merge-fraction)
 (defun iparams-method (iparams)
   (if (iparams-current iparams)
       (params-method  (iparams-current iparams))
@@ -112,22 +112,20 @@
   (method :vr)
   merge-start
   merge-duration
-  merge-fraction
   info
   fc0
   fc1
   fraction)
 
 (defmethod print-object ((thing params) stream)
-  (format stream "{PARAMS T:~a C:~a F:~,2f F0:~a F1:~a M:~a+~a/~a}"
+  (format stream "{PARAMS T:~a C:~a F:~,2f F0:~a F1:~a M:~a+~a}"
           (format-ddhhmm nil (params-timestamp thing))
           (format-timestamp-as-cycle nil (params-base-time thing))
           (params-fraction thing)
           (params-fc0 thing)
           (params-fc1 thing)
           (params-merge-start thing)
-          (params-merge-duration thing)
-          (params-merge-fraction thing)))
+          (params-merge-duration thing)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -264,16 +262,15 @@
 
 (declaim (inline grib-get-uv))
 (defun grib-get-uv (uv index)
+  (declare (ftype (function (t) (array double-float (*))) uv-u-array uv-v-array))
   (let ((u (aref (uv-u-array uv) index))
         (v (aref (uv-v-array uv) index)))
-    (declare ((array double-float *) uv-u-array uv-v-array))
     ;;(log2:trace "~a => ~,2,,'0,f,~,2,,'0,f" index (angle u v) (enorm u v))
     (values u v)))
-;; (declaim (notinline grib-get-uv))
+(declaim (notinline grib-get-uv))
 
 (defmethod print-object ((ts timestamp) stream)
   (format-datetime stream ts))
-
 
 (defun base-time (iparams)
   (params-base-time (iparams-current iparams)))
@@ -287,7 +284,6 @@
                                           method
                                           merge-start
                                           merge-duration
-                                          merge-fraction
                                           (source :noaa)
                                           (cycle (available-cycle timestamp))
                                           (resolution "0p25")
@@ -316,7 +312,6 @@
                      :method method
                      :merge-start merge-start
                      :merge-duration merge-duration
-                     :merge-fraction merge-fraction
                      :forecast forecast
                      :next-fc next-fc
                      :fc0 fc0
@@ -354,25 +349,20 @@
                              0d0
                              (coerce (/ (timestamp-difference timestamp merge-start-ts) merge-duration) 'double-float)))
          (offset (cycle-offset cycle1 timestamp))
-         (current (when (or
-                         (eq source :vr)
-                         (timestamp>= timestamp merge-start-ts))
-                    (prediction-parameters timestamp
-                                           :method method
-                                           :merge-fraction merge-fraction
-                                           :source source
-                                           :cycle cycle1
-                                           :resolution resolution)))
-         
-         (previous (when
-                       (and (not (eq source :vr))
-                            (timestamp< timestamp merge-end-ts))
-                     (prediction-parameters timestamp
-                                            :method method
-                                            :merge-fraction merge-fraction
-                                            :source source
-                                            :cycle cycle0
-                                            :resolution resolution))))
+         (current
+           (when (timestamp>= timestamp merge-start-ts)
+             (prediction-parameters timestamp
+                                    :method method
+                                    :source source
+                                    :cycle cycle1
+                                    :resolution resolution)))
+         (previous
+           (when (timestamp< timestamp merge-end-ts)
+             (prediction-parameters timestamp
+                                    :method method
+                                    :source source
+                                    :cycle cycle0
+                                    :resolution resolution))))
     (when (and current previous)
       (log2:trace "Merging ~a ~a ~a ~a" timestamp merge-start-ts merge-duration merge-fraction))
 
@@ -380,6 +370,7 @@
     (log2:trace "C:~a  P: ~a" current previous)
     (make-iparams :current current
                   :previous previous
+                  :merge-fraction merge-fraction
                   :offset offset)))
 
 ;;; EOF

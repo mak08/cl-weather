@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2024-02-05 23:09:41>
+;;; Last Modified <michael 2025-11-01 18:49:22>
 
 (declaim (optimize (speed 3) (debug 1) (space 1) (safety 1)))
 
@@ -20,61 +20,6 @@
 ;;;
 ;;; -  Compute s_uv = enorm(u, v)
 
-(declaim (inline magnitude-factor))
-(defun-t magnitude-factor double-float
-    ((wlat double-float)
-     (wlng double-float)
-     (wind-u double-float)
-     (wind-v double-float)
-     (s00 double-float)
-     (s01 double-float)
-     (s10 double-float)
-     (s11 double-float)
-     (u00 double-float)
-     (u01 double-float)
-     (u10 double-float)
-     (u11 double-float)
-     (v00 double-float)
-     (v01 double-float)
-     (v10 double-float)
-     (v11 double-float))
-  (flet ((avg4 (x1 x2 x3 x4)
-           (/ (+ x1 x2 x3 x4) 4))
-         (scoeff (a0 a1)
-           (abs (sin (- a0 a1)))))
-    (let* ((a00 (angle u00 v00))
-           (a01 (angle u01 v01))
-           (a10 (angle u10 v10))
-           (a11 (angle u11 v11))
-           (avg-enorm (enorm (avg4 u00 u01 u10 u11) (avg4 v00 v01 v10 v11)))
-           (speed-bilinear (bilinear wlat wlng s00 s01 s10 s11))
-           (speed-enorm (enorm wind-u wind-v))
-           (speed-avg (avg4 s00 s10 s01 s11))
-           (speed-ratio (if (> speed-avg 0) (/ avg-enorm speed-avg) 1d0)))
-      (multiple-value-bind (c10 c11 c00 c01)
-          (cond ((< wlng 0.5d0)
-                 (cond ((< wlat 0.5d0)
-                        ;; left top
-                        (values (scoeff a10 a00) speed-ratio 1d0 (scoeff a00 a01)))
-                       (t
-                        ;; left bottom
-                        (decf wlat 0.5d0)
-                        (values 1d0 (scoeff a10 a11) (scoeff a10 a00) speed-ratio))))
-                (t
-                 (decf wlng 0.5d0)
-                 (cond ((< wlat 0.5d0)
-                        ;; right top
-                        (values speed-ratio (scoeff a11 a01) (scoeff a00 a01) 1d0))
-                       (t
-                        ;; right bottom
-                        (decf wlat 0.5d0)
-                        (values (scoeff a10 a11) 1d0 speed-ratio (scoeff a11 a01))))))
-        (if (> speed-bilinear 0)
-            (expt (/ speed-enorm speed-bilinear)
-                  (- 1d0 (expt (bilinear (* wlat 2d0) (* wlng 2d0) c00 c01 c10 c11)
-                               0.7d0)))
-            1d0)))))
-
 (declaim (inline position-interpolate))
 (defun position-interpolate (method wlat wlng u00 u01 u10 u11 v00 v01 v10 v11)
   (let* ((wind-u (bilinear wlat wlng u00 u01 u10 u11))
@@ -89,21 +34,15 @@
                (enorm wind-u wind-v)))
       (:bilinear
        (values (angle wind-u wind-v)
-               (bilinear wlat wlng s00 s01 s10 s11)))
-      (:vr
-       (values (angle wind-u wind-v)
-               (*
-                ;; (magnitude-factor wlat wlng wind-u wind-v s00 s01 s10 s11 u00 u01 u10 u11 v00 v01 v10 v11)
-                (bilinear wlat wlng s00 s01 s10 s11)))))))
+               (bilinear wlat wlng s00 s01 s10 s11))))))
 
 (declaim (inline time-interpolate-index))
-(defun time-interpolate-index (index current offset previous)
+(defun time-interpolate-index (index current previous merge-fraction)
   (let* ((fraction (if previous (params-fraction previous) (params-fraction current)))
          (cycle1-fc0 (when current (params-fc0 current)))
          (cycle1-fc1 (when current (params-fc1 current)))
          (cycle0-fc0 (when previous (params-fc0 previous)))
-         (cycle0-fc1 (when previous (params-fc1 previous)))
-         (merge-fraction (if previous (params-merge-fraction previous) (params-merge-fraction current))))
+         (cycle0-fc1 (when previous (params-fc1 previous))))
     (cond
       ((and current
             previous)
@@ -134,7 +73,7 @@
        (error "Have neither current nor previous")))))
 
 (declaim (inline time-interpolate))
-(defun time-interpolate (lat lng info current offset-new previous)
+(defun time-interpolate (lat lng info current previous merge-fraction)
   (declare (inline grib-get-uv))
   (let* ((i-inc (gribinfo-i-inc info))
          (j-inc (gribinfo-j-inc info))
@@ -146,14 +85,17 @@
          (i01 (uv-index info lat0 lng1))
          (i10 (uv-index info lat1 lng0))
          (i11 (uv-index info lat1 lng1)))
-    (with-bindings (((u00 v00) (time-interpolate-index i00 current offset-new previous))
-                    ((u01 v01) (time-interpolate-index i01 current offset-new previous))
-                    ((u10 v10) (time-interpolate-index i10 current offset-new previous))
-                    ((u11 v11) (time-interpolate-index i11 current offset-new previous)))
+    (declare (double-float lat lng i-inc j-inc lat0 lng0 lat1 lng1)
+             (fixnum i00 i01 i10 i11))
+    (with-bindings (((u00 v00) (time-interpolate-index i00 current previous merge-fraction))
+                    ((u01 v01) (time-interpolate-index i01 current previous merge-fraction))
+                    ((u10 v10) (time-interpolate-index i10 current previous merge-fraction))
+                    ((u11 v11) (time-interpolate-index i11 current previous merge-fraction)))
       (values u00 u01 u10 u11
               v00 v01 v10 v11))))
 
-(defun vr-prediction% (lat lng current offset-new &optional previous)
+(declaim (inline interpolate%))
+(defun interpolate% (lat lng current &optional previous merge-fraction)
   (declare (inline normalized-lat normalized-lng uv-index time-interpolate angle bilinear enorm))
   (let* ((info (if previous (params-info previous) (params-info current)))
          (method (if previous (params-method previous) (params-method current)))
@@ -163,8 +105,9 @@
          (lng0 (normalized-lng (* (ffloor lng i-inc) i-inc)))
          (wlat (/ (- (normalized-lat lat) lat0) j-inc))
          (wlng (/ (- (normalized-lng lng) lng0) i-inc)))
+    (declare (double-float lat lng i-inc j-inc lat0 lng0 wlat wlng))
     (multiple-value-bind (u00 u01 u10 u11 v00 v01 v10 v11)
-        (time-interpolate lat lng info current offset-new previous)
+        (time-interpolate lat lng info current previous merge-fraction)
       (position-interpolate method wlat wlng u00 u01 u10 u11 v00 v01 v10 v11))))
 
 
@@ -173,13 +116,9 @@
 
 (defun interpolate (lat lng iparams)
   (let ((params-new (iparams-current iparams))
-        (offset-new (iparams-offset iparams))
-        (params-old (iparams-previous iparams)))
-    (vr-prediction% lat lng params-new  offset-new params-old)))
-
-(defun vr-prediction (lat lng  &key (timestamp (now)) (cycle (make-cycle :timestamp timestamp)) (resolution "1p00"))
-  (let* ((params (prediction-parameters timestamp :cycle cycle :resolution resolution)))
-    (vr-prediction% lat lng params nil)))
+        (params-old (iparams-previous iparams))
+        (merge-fraction (iparams-merge-fraction iparams)))
+    (interpolate% lat lng params-new params-old merge-fraction)))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
