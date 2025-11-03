@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Access to NOAA forecasts (non-interpolated)
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2024-01-28 22:40:44>
+;;; Last Modified <michael 2025-11-03 22:24:22>
 
 (in-package "CL-WEATHER")
 
@@ -81,10 +81,10 @@
         (timers:add-timer #'noaa-forecast-ht-cleanup
                           :id "FORECAST-CLEANUP"
                           :hours '(5 11 17 23)
-                          :minutes '(0))))
+                          :minutes '(10))))
 
 (defun noaa-forecast-ht-cleanup ()
-  (let* ((expiry (adjust-timestamp (now) (:offset :hour -18))))
+  (let* ((expiry (adjust-timestamp (now) (:offset :hour -12))))
     (bordeaux-threads:with-lock-held (+forecast-ht-lock+)
       (log2:info "Searching hash entries older than ~a" (format-timestring nil expiry))
       (maphash
@@ -92,9 +92,16 @@
          (declare (ignore v))
          (destructuring-bind (source datestring run offset resolution)
              k
-           (log2:info "Checking ~a ~a-~a-~a ~a" source datestring run offset resolution)
-           (let ((time (parse-timestring (datestring-run-to-timestamp datestring run))))
-             (when (timestamp< time expiry)
+           (let* ((time (parse-timestring (datestring-run-to-timestamp datestring run)))
+                  (remove (timestamp< time expiry)))
+             (log2:trace "~a ~a <FC> ~a-~a-~a <fc-age> ~a <exp-age> ~a => ~:[keep~;remove~]"
+                        source
+                        resolution
+                        datestring run offset
+                        (format-datetime nil time)
+                        (format-datetime nil expiry)
+                        remove)
+             (when remove
                (log2:info "Removing ~a" k)
                (remhash k cl-weather::*forecast-ht*)))))
        *forecast-ht*))))
