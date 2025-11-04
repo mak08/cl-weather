@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2025-10-04 20:58:25>
+;;; Last Modified <michael 2025-11-04 00:42:05>
 
 (in-package "CL-WEATHER")
 
@@ -305,7 +305,8 @@
       (grib2-filter-uv10 cycle offset destpath :resolution resolution))
   (unless (and (probe-file destpath)
                (grib-file-complete-p destpath))
-    (error 'incomplete-download :cycle cycle :offset offset :resolution resolution :filename destpath)))
+    (error 'incomplete-download :cycle cycle :offset offset :resolution resolution :filename destpath))
+  (setf *latest-forecast* (format nil "~a:~a" cycle offset)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Download by filter
