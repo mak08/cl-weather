@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2023-12-04 23:29:12>
+;;; Last Modified <michael 2025-11-12 19:18:13>
 
 (defsystem "cl-weather"
   :description "Load and prepare weather data"
@@ -18,6 +18,7 @@
                (:file "cycle-update")
                (:file "forecast")
                (:file "prediction")
+               (:file "prediction-fw")
                (:file "tiles")))
 
 ;;; EOF

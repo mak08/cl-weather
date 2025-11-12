@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2024-05-04 14:41:44>
+;;; Last Modified <michael 2025-11-12 20:34:27>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
@@ -16,7 +16,6 @@
            "+NCEP-NOMADS+"
            "+NCEP-FTPPRD+"
            "*GRIB-DIRECTORY*"
-           "*VR-GRIB-DIRECTORY*"
            "*USE-RANGE-QUERY*"
            "*MERGE-START*"
            "*MERGE-WINDOW*"
@@ -30,7 +29,6 @@
            "PREVIOUS-CYCLE"
            "DOWNLOAD-LATEST-CYCLE"
            "DOWNLOAD-CYCLE"
-           "VR-DOWNLOAD-CYCLE"
            "CLEANUP-CYCLES"
            "DATASET-BASETIME"
            "DATASET-CYCLE"
@@ -43,26 +41,16 @@
            "CYCLE-DATESTRING"
            "CYCLE-STRING"
            "CYCLE-RUN"
-           "PREDICTION-PARAMETERS"
-           "PARAMS-BASE-TIME"
-           "PARAMS-TIMESTAMP"
-           "VR-PARAMETERS"
-           "VR-ESTIMATOR"
-           "MAKE-IPARAMS"
-           "IPARAMS-CURRENT"
-           "BASE-TIME"
-           "IPARAMS-EFFECTIVE-CYCLE"
+
+           "GET-PARAMS"
+           "PARAMS-FW-FC0"
+           "PARAMS-FW-FC1"
+           "PARAMS-FW-FRACTION"
 
            "TIMESPEC-TO-TIMESTAMP"
            "TIMESTAMP-TO-TIMESPEC"
 
-           "NOAA-PREDICTION%"
-           "NOAA-PREDICTION"
-           "VR-PREDICTION%"
-           "VR-PREDICTION"
-           "INTERPOLATION-PARAMETERS"
-           "INTERPOLATED-PREDICTION"
-           "INTERPOLATE"
+           "INTERPOLATE-FW"
 
            "TILE-FILENAME"
            "CREATE-TILES"

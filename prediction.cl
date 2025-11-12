@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2025-11-01 18:49:22>
+;;; Last Modified <michael 2025-11-11 20:50:50>
 
 (declaim (optimize (speed 3) (debug 1) (space 1) (safety 1)))
 
@@ -109,7 +109,6 @@
     (multiple-value-bind (u00 u01 u10 u11 v00 v01 v10 v11)
         (time-interpolate lat lng info current previous merge-fraction)
       (position-interpolate method wlat wlng u00 u01 u10 u11 v00 v01 v10 v11))))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; API Functions

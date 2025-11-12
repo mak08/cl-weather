@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2025-11-01 18:35:14>
+;;; Last Modified <michael 2025-11-11 23:15:10>
 
 (in-package :cl-weather)
 
@@ -92,8 +92,9 @@
   (make-cycle :timestamp (dataset-basetime dataset)))
 
 (defmethod print-object ((thing dataset) stream)
-  (format stream "{dataset base=~a}"
-          (format-datetime nil (dataset-basetime thing))))
+  (format stream "{dataset base=~a forecasts=~a}"
+          (format-datetime nil (dataset-basetime thing))
+          (dataset-forecasts thing)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Interpolation parameters

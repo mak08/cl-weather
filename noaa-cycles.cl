@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2025-11-01 17:31:02>
+;;; Last Modified <michael 2025-11-11 21:18:33>
 
 (in-package "CL-WEATHER")
 
@@ -10,16 +10,16 @@
   ;; after the forecast computation starts.
   (make-cycle :timestamp (adjust-timestamp (now) (offset :minute (- 210)))))
 
-(defun available-cycle (timestamp)
+(defun available-cycle (timestamp &optional (avail-time
+                                             (let* ((now (now))
+                                                    (diff (timestamp-difference timestamp now)))
+                                               (adjust-timestamp (if (< diff 0) timestamp now)
+                                                 (offset :minute (- 210))))))
   ;; If $timestamp is in the future:
   ;;   If the forecasts already available from the latest cycle cover $timestamp,
   ;;   return the current cycle, otherwise return the previous cycle.
   ;; If $timestamp is in the past, return the latest cycle that included it.
-  (let* ((now (now))
-         (diff (timestamp-difference timestamp now))
-         (avail-time (adjust-timestamp (if (< diff 0) timestamp now)
-                       (offset :minute (- 210))))
-         (cycle (make-cycle :timestamp avail-time))
+  (let* ((cycle (make-cycle :timestamp avail-time))
          (elapsed (truncate (timestamp-difference (now)
                                                   (cycle-timestamp cycle)) 60))
          (forecast (cycle-forecast cycle timestamp))
@@ -68,6 +68,7 @@
 
 ;; Return the 3-hour-forecast required for $timestamp when using $cycle
 (defun cycle-forecast (cycle timestamp)
+  "The forecast step in the cycle covering timestamp" 
   (let* ((basetime (cycle-timestamp cycle)) 
          (difference (truncate
                       (timestamp-difference timestamp basetime)
