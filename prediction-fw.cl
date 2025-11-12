@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2025-11-12 20:21:09>
+;;; Last Modified <michael 2025-11-12 23:01:51>
 
 (declaim (optimize (speed 3) (debug 1) (space 1) (safety 1)))
 
@@ -80,8 +80,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; API
 
+(declaim (inline interpolate-fw))
 (defun interpolate-fw (lat lon fc-0 fc-1 fraction)
     (get-values fraction lat lon fc-0 fc-1))
 
+
+(defun get-wind-fw (timestamp lat lon)
+  (let ((params (get-params timestamp)))
+    (interpolate-fw lat lon (params-fw-fc0 params) (params-fw-fc1 params) (params-fw-fraction params)))) 
+  
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
