@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2025-11-12 23:01:51>
+;;; Last Modified <michael 2025-11-13 23:03:37>
 
 (declaim (optimize (speed 3) (debug 1) (space 1) (safety 1)))
 
@@ -74,7 +74,7 @@
               (s10-1 (enorm u10-1 v10-1))
               (s11-1 (enorm u11-1 v11-1))
               (s-1 (bilinear wlat wlon s00-1 s01-1 s10-1 s11-1)))
-         (values (linear fraction (angle u-0 v-0) (angle u-1 v-1))
+         (values (angle (linear fraction u-0 u-1) (linear fraction v-0 v-1))
                  (linear fraction s-0 s-1))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -87,7 +87,9 @@
 
 (defun get-wind-fw (timestamp lat lon)
   (let ((params (get-params timestamp)))
-    (interpolate-fw lat lon (params-fw-fc0 params) (params-fw-fc1 params) (params-fw-fraction params)))) 
+    (multiple-value-bind (d s)
+        (interpolate-fw lat lon (params-fw-fc0 params) (params-fw-fc1 params) (params-fw-fraction params))
+      (values d (m/s-to-knots s)))))
   
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
