@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2025-11-04 00:43:07>
+;;; Last Modified <michael 2025-11-21 01:14:31>
 
 (in-package "CL-WEATHER")
 (setf (log2:log-level "cl-weather") log2:+info+)
@@ -15,6 +15,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Specific  to this module
 
+
+
+;; This variable should be called *NOAA-GRIB-DIRECTORY*
+;; ==> The UI requests forecasts from /weather/noaa
+;; ==> server-config.cl maps ....
 (defvar *grib-directory*
   (merge-pathnames (make-pathname :directory '(:relative "weather" "noaa")) *source-root*))
 
