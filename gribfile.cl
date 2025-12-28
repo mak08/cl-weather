@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2017
-;;; Last Modified <michael 2019-06-30 23:08:50>
+;;; Last Modified <michael 2025-12-20 19:20:28>
 
 (in-package :cl-weather)
 
@@ -22,20 +22,19 @@
        :for step :across steps
        :do (progn
              (codes-index-select-long index "step" step)
-             (multiple-value-bind (u-data-time u-offset u-grib-info u-values)
-                 (select-and-read-message index "10u")
-               (multiple-value-bind (v-data-time u-offset v-grib-info v-values)
-                   (select-and-read-message index "10v")
-                 (when (= i 0)
-                   (setf (dataset-basetime result) u-data-time)
-                   (setf (dataset-grib-info result) u-grib-info))
-                 (setf (aref forecasts i)
-                       (make-uv :dataset result
-                                :cycle u-data-time
-                                :offset (* u-offset 60)
-                                :step step
-                                :u-array u-values
-                                :v-array v-values))))))
+             (with-bindings (((u-data-time u-offset u-grib-info u-values)
+                              (select-and-read-message index "10u"))
+                             ((v-data-time v-offset v-grib-info v-values)
+                              (select-and-read-message index "10v")))
+               (setf (dataset-basetime result) u-data-time)
+               (setf (dataset-grib-info result) u-grib-info)
+               (setf (aref forecasts i)
+                     (make-uv :dataset result
+                              :cycle u-data-time
+                              :offset (* u-offset 60)
+                              :step step
+                              :u-array u-values
+                              :v-array v-values)))))
     (codes-index-delete index)
     (setf (dataset-forecasts result) forecasts)
     (values
