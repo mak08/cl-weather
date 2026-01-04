@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2025-11-12 19:18:13>
+;;; Last Modified <michael 2026-01-04 17:33:18>
 
 (defsystem "cl-weather"
   :description "Load and prepare weather data"
@@ -13,8 +13,8 @@
                (:file "macros")
                (:file "datatypes")
                (:file "gribfile")
-               (:file "noaa-cycles")
-               (:file "noaa-download")
+               (:file "cycles")
+               (:file "download")
                (:file "cycle-update")
                (:file "forecast")
                (:file "prediction")
