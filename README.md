@@ -1,2 +1,2 @@
 # cl-weather
-Access weather forecasts (NOAA &amp; DWD)
+Access weather forecasts (NOAA &amp; ECMWF)
