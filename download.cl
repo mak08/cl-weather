@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2025-11-04 00:42:05>
+;;; Last Modified <michael 2026-01-04 15:55:37>
 
 (in-package "CL-WEATHER")
 
@@ -79,7 +79,7 @@
 ;;;
 ;;;   Download the specified cycle. If a forecast is (still) missing, wait or abort.
 
-(defun download-cycle (cycle &key (resolution '("1p00")) (max-offset 384) (if-missing :wait))
+(defun download-cycle (cycle &key (resolution '("0p25")) (max-offset 384) (if-missing :wait))
   (ignore-errors
    (ecase (cycle-run cycle) ((or 0 6 12 18)))
    (ecase if-missing ((or :wait :abort)))
@@ -98,9 +98,8 @@
 (defun download-forecast (start-time cycle offset resolution &key (if-missing :wait))
   (log2:trace "Downloading ~a-~a using ~a" cycle offset (download-source-log-string))
   (let* ((destpath
-           (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
-    (ensure-directories-exist destpath)
-    (ensure-directories-exist (vr-destpath :cycle cycle :offset offset :resolution resolution))
+           (forecast-destpath :source :noaa :cycle cycle :offset offset :resolution resolution)))
+    (ensure-directories-exist destpath) 
     (cond
       ((and (probe-file destpath)
             (grib-file-complete-p destpath))
@@ -259,7 +258,7 @@
 
 (defun download-noaa-file (cycle offset &key (resolution "1p00"))
   (let* ((spec (noaa-spec :cycle cycle :offset offset :resolution resolution))
-         (destpath (noaa-destpath :cycle cycle :offset offset :resolution resolution)))
+         (destpath (forecast-destpath :source :noaa :cycle cycle :offset offset :resolution resolution)))
     (cond
       ((and (probe-file destpath)
             (grrib-file-complete-p destpath))
@@ -357,7 +356,6 @@
         (grib2-get-u-v-10-range index)
       (let* ((path
                (noaa-file cycle offset :resolution resolution))
-             (vr-destpath (vr-destpath :cycle cycle :offset offset :resolution resolution))
              (url
               (format nil "~a -H \"Range: bytes=~a-~a\""
                       path
@@ -373,8 +371,8 @@
 
 (defun create-transform-command (cycle offset resolution)
   (format () "wgrib2 ~a -set_grib_max_bits 7 -set_grib_type jpeg -grib_out ~a"
-          (noaa-destpath :cycle cycle :offset offset :resolution resolution)
-          (vr-destpath :cycle cycle :offset offset :resolution resolution)))
+          (forecast-destpath :source :noaa :cycle cycle :offset offset :resolution resolution)
+          (forecast-destpath :source :vr :cycle cycle :offset offset :resolution resolution)))
   
 (defun grib2-get-index (cycle offset &key (resolution "1p00"))
   (let* ((url
@@ -518,17 +516,36 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Local forecast file name
 
-(defun noaa-destpath (&key (cycle (make-cycle)) (offset 6) (basename "pgrb2") (resolution "1p00"))
-  (let* ((spec
-           (noaa-spec :cycle cycle :offset offset  :basename basename :resolution resolution))
-         (destfile 
-           (format () "~a_~a.grib2" (cycle-datestring cycle) spec))
-         (cycle-dir
-           (make-pathname :directory (append (pathname-directory *grib-directory*)
-                                             (list resolution
-                                                   (cycle-datestring cycle)
-                                                   (format nil "~2,,,'0@a" (cycle-run cycle)))))))
-    (merge-pathnames destfile cycle-dir)))
+(defun forecast-destpath (&key
+                            (source :noaa)
+                            (cycle (make-cycle))
+                            (offset 6)
+                            (basename "pgrb2")
+                            (resolution "0p25"))
+  (ecase source
+    (:noaa
+     (let* ((spec
+              (noaa-spec :cycle cycle :offset offset  :basename basename :resolution resolution))
+            (destfile 
+              (format () "~a_~a.grib2" (cycle-datestring cycle) spec))
+            (cycle-dir
+              (make-pathname :directory (append (pathname-directory *grib-directory*)
+                                                (list resolution
+                                                      (cycle-datestring cycle)
+                                                      (format nil "~2,,,'0@a" (cycle-run cycle)))))))
+       (merge-pathnames destfile cycle-dir)))
+    (:vr
+     (let* ((run (cycle-run cycle))
+            (timestamp (cycle-timestamp cycle))
+            (date (format-yyyymmdd nil timestamp))
+            (destfile 
+              (format () +vr-destpath-template+ date run offset resolution))
+            (cycle-dir
+              (make-pathname :directory (append (pathname-directory *vr-grib-directory*)
+                                                (list resolution
+                                                      (cycle-datestring cycle)
+                                                      (format nil "~2,,,'0@a" (cycle-run cycle)))))))
+       (merge-pathnames destfile cycle-dir)))))
 
 (defun noaa-archivepath (&key (cycle 0) (offset 6) (basename "pgrb2") (resolution "1p00"))
   (let* ((spec
@@ -536,19 +553,6 @@
          (destfile 
            (format () "~a_~a.grib2" (cycle-datestring cycle) spec)))
     (file-archive-path destfile)))
-
-(defun vr-destpath (&key (cycle (make-cycle)) (offset 6) (resolution "0p25"))
-  (let* ((run (cycle-run cycle))
-         (timestamp (cycle-timestamp cycle))
-         (date (format-yyyymmdd nil timestamp))
-         (destfile 
-           (format () +vr-destpath-template+ date run offset resolution))
-         (cycle-dir
-           (make-pathname :directory (append (pathname-directory *vr-grib-directory*)
-                                             (list resolution
-                                                   (cycle-datestring cycle)
-                                                   (format nil "~2,,,'0@a" (cycle-run cycle)))))))
-    (merge-pathnames destfile cycle-dir)))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
