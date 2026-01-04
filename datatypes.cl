@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2025-11-11 23:15:10>
+;;; Last Modified <michael 2025-12-28 22:30:58>
 
 (in-package :cl-weather)
 
@@ -84,7 +84,7 @@
 
 (defstruct dataset
   basetime                              ; Base time of forecast data
-  grib-info                             ; Grid description
+  info                                  ; Grid description
   forecasts                             ; Array of uv data
   )
 
@@ -305,7 +305,7 @@
              (fc0 (dataset-forecast ds0))
              (fc1 (dataset-forecast ds1))
              (fraction (forecast-fraction fc0 fc1 timestamp))
-             (info (dataset-grib-info ds0)))
+             (info (dataset-info ds0)))
         (log2:trace "next-fc ~a method ~a" next-fc method)
         (make-params :info info
                      :timestamp timestamp

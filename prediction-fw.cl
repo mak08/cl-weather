@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2025-11-13 23:03:37>
+;;; Last Modified <michael 2025-12-30 22:26:23>
 
 (declaim (optimize (speed 3) (debug 1) (space 1) (safety 1)))
 
@@ -37,7 +37,7 @@
 (declaim (inline get-values))
 (defun get-values (fraction lat lon fc-0 fc-1)
   (let* ((dataset (uv-dataset fc-0))
-         (info (dataset-grib-info dataset))
+         (info (dataset-info dataset))
          (i-inc (gribinfo-i-inc info))
          (j-inc (gribinfo-j-inc info))
          (lat0 (normalized-lat (* (ffloor lat j-inc) j-inc)))

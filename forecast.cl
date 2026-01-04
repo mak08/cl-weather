@@ -1,15 +1,21 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Access to NOAA forecasts (non-interpolated)
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2025-11-03 22:24:22>
+;;; Last Modified <michael 2026-01-04 12:28:11>
 
 (in-package "CL-WEATHER")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Load forecast
+;;; Loading forecast data
 
-(defun load-forecast (&key (source :noaa) (cycle (make-cycle)) (offset 0) (resolution "1p00"))
-  "Read GRIB data into U and V arrays. Assumes the GRIB file contains U-GRD and V-GRD values"
+(defun load-forecast (&key (source :noaa)
+                        (u-and-v-var '("10u" "10v"))
+                        (cycle (make-cycle))
+                        (offset 0)
+                        (resolution "1p00"))
+  "Return requested U/V data from cache.
+Read from file if not cached.
+Filename is determined by FIND-FILE-FOR-SPEC."
   (let ((key (list source
                    (cycle-datestring cycle)
                    (cycle-run cycle)
@@ -18,43 +24,30 @@
     (bordeaux-threads:with-lock-held (+forecast-ht-lock+)
       (or (gethash key *forecast-ht*)
           (setf (gethash key *forecast-ht*)
-                (load-forecast% :source source :cycle cycle :offset offset :resolution resolution))))))
+                (load-forecast% :source source :u-and-v-var u-and-v-var :cycle cycle :offset offset :resolution resolution))))))
 
-(defun load-forecast% (&key (source :noaa) (cycle (make-cycle)) (offset 0) (resolution "1p00"))
-  (let ((filename (find-file-for-spec :source source :cycle cycle :offset offset :resolution resolution))
-        (index (codes-index-new '("step" "shortName"))))
-    (log2:info "Loading forecast ~a~%" filename)
-    (let ((retcode (codes-index-add-file index filename)))
-      (case retcode
-        (0)
-        (-11
-         (log2:warning "codes-index-add-file: ~a ~a" filename retcode)
-         (error 'missing-forecast :cycle cycle :offset offset :resolution resolution :filename filename))
-        (t
-         (let ((message (codes-get-error-message retcode)))
-           (log2:warning "codes-index-add-file: ~a: ~a" filename retcode)
-           (error "eccodes: ~a: ~a" filename message))))
-      (get-uv-steps-from-index index))))
-
-(defun load-grib-file (filename)
-  (let ((index (codes-index-new '("step" "shortName"))))
-    (log2:info "Loading forecast ~a~%" filename)
-    (let ((retcode (codes-index-add-file index filename)))
-      (case retcode
-        (0)
-        (-11
-         (log2:warning "codes-index-add-file: ~a ~a" filename retcode)
-         (error 'missing-forecast))
-        (t
-         (let ((message (codes-get-error-message retcode)))
-           (log2:warning "codes-index-add-file: ~a: ~a" filename retcode)
-           (error "eccodes: ~a: ~a" filename message))))
-      (get-uv-steps-from-index index))))
+(defun load-forecast% (&key (source :noaa)
+                         (u-and-v-var '("10u" "10v"))
+                         (cycle (make-cycle))
+                         (offset 0)
+                         (resolution "1p00"))
+  (let ((filename (find-file-for-spec :source source :cycle cycle :offset offset :resolution resolution)))
+    (with-grib-index (index '("step" "shortName"))
+      (log2:info "Loading forecast ~a~%" filename)
+      (let ((retcode (codes-index-add-file index filename)))
+        (case retcode
+          (0)
+          (-11
+           (log2:warning "codes-index-add-file: ~a ~a" filename retcode)
+           (error 'missing-forecast :cycle cycle :offset offset :resolution resolution :filename filename))
+          (t
+           (let ((message (codes-get-error-message retcode)))
+             (log2:warning "codes-index-add-file: ~a: ~a" filename retcode)
+             (error "eccodes: ~a: ~a" filename message))))
+        (get-uv-steps-from-index index u-and-v-var)))))
 
 (defun find-file-for-spec (&key source cycle offset resolution)
-  (let ((dest-path (ecase source
-                     (:noaa (noaa-destpath :cycle cycle :offset offset :resolution resolution))
-                     (:vr  (vr-destpath :cycle cycle :offset offset :resolution resolution)))))
+  (let ((dest-path (forecast-destpath :source source :cycle cycle :offset offset :resolution resolution)))
     (if (probe-file dest-path)
         (namestring dest-path)
         (let ((archive-path  (noaa-archivepath :cycle cycle :offset offset :resolution resolution)))
