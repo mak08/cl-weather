@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2025-11-21 01:14:31>
+;;; Last Modified <michael 2026-01-06 11:31:04>
 
 (in-package "CL-WEATHER")
 (setf (log2:log-level "cl-weather") log2:+info+)
@@ -15,16 +15,18 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Specific  to this module
 
+;; Local GRIB storage
+(defvar *grib-directory*
+  (merge-pathnames (make-pathname :directory '(:relative "weather")) *source-root*))
 
-
+;; OBSOLETE kept here for the comment
+;; TODO:
+;;    UI support for multiple GRIB sources
 ;; This variable should be called *NOAA-GRIB-DIRECTORY*
 ;; ==> The UI requests forecasts from /weather/noaa
 ;; ==> server-config.cl maps ....
-(defvar *grib-directory*
+(defvar *noaa-grib-directory*
   (merge-pathnames (make-pathname :directory '(:relative "weather" "noaa")) *source-root*))
-
-(defvar *vr-grib-directory*
-  (merge-pathnames (make-pathname :directory '(:relative "weather" "vr")) *source-root*))
 
 (defvar  *load-previous* nil)
 

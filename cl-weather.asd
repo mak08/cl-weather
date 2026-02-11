@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2026-01-04 17:33:18>
+;;; Last Modified <michael 2026-02-11 22:28:59>
 
 (defsystem "cl-weather"
   :description "Load and prepare weather data"
@@ -11,9 +11,11 @@
   :components ((:file "package")
                (:file "common")
                (:file "macros")
+               (:file "curl-wrapper")
                (:file "datatypes")
                (:file "gribfile")
-               (:file "cycles")
+               (:file "datasource")
+               (:file "datasource-download")
                (:file "download")
                (:file "cycle-update")
                (:file "forecast")

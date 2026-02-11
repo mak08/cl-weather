@@ -1,64 +1,65 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Access to NOAA forecasts (non-interpolated)
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2026-01-04 12:28:11>
+;;; Last Modified <michael 2026-02-11 20:46:40>
 
 (in-package "CL-WEATHER")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Loading forecast data
 
-(defun load-forecast (&key (source :noaa)
-                        (u-and-v-var '("10u" "10v"))
-                        (cycle (make-cycle))
-                        (offset 0)
-                        (resolution "1p00"))
-  "Return requested U/V data from cache.
-Read from file if not cached.
-Filename is determined by FIND-FILE-FOR-SPEC."
-  (let ((key (list source
-                   (cycle-datestring cycle)
-                   (cycle-run cycle)
-                   offset
-                   resolution)))
-    (bordeaux-threads:with-lock-held (+forecast-ht-lock+)
-      (or (gethash key *forecast-ht*)
-          (setf (gethash key *forecast-ht*)
-                (load-forecast% :source source :u-and-v-var u-and-v-var :cycle cycle :offset offset :resolution resolution))))))
+(defun load-forecast (datasource step)
+  "Return requested U/V data. Cached."
+  (let ((max (maxstep datasource)))
+    (when (> step max)
+      (log2:warning "Step ~a out of range, using max (~a)" step max)
+      (setf step max))
+    (let* ((key (get-key datasource step)))
+      (bordeaux-threads:with-lock-held (+forecast-ht-lock+)
+        (unless (gethash key *forecast-ht*)
+          (load-datasource-forecasts datasource step))
+        (gethash key *forecast-ht*)))))
 
-(defun load-forecast% (&key (source :noaa)
-                         (u-and-v-var '("10u" "10v"))
-                         (cycle (make-cycle))
-                         (offset 0)
-                         (resolution "1p00"))
-  (let ((filename (find-file-for-spec :source source :cycle cycle :offset offset :resolution resolution)))
+(defun get-key (datasource step)
+  (list step
+        (name datasource)
+        (cycle-run (cycle datasource))
+        (cycle-datestring (cycle datasource))
+        (resolution datasource)))
+
+(defmethod load-datasource-forecasts ((datasource datasource) step)
+  (let* ((file-step (file-step datasource step))
+         (filename (namestring (local-pathname datasource file-step)))
+         (u-and-v-var (uv-variables datasource)))
     (with-grib-index (index '("step" "shortName"))
       (log2:info "Loading forecast ~a~%" filename)
       (let ((retcode (codes-index-add-file index filename)))
         (case retcode
           (0)
           (-11
-           (log2:warning "codes-index-add-file: ~a ~a" filename retcode)
-           (error 'missing-forecast :cycle cycle :offset offset :resolution resolution :filename filename))
+           (let ((cycle (cycle datasource))
+                 (resolution (resolution datasource)))
+             (log2:warning "codes-index-add-file: ~a ~a" filename retcode)
+             (error 'missing-forecast :cycle cycle :offset step :resolution resolution :filename filename)))
           (t
            (let ((message (codes-get-error-message retcode)))
              (log2:warning "codes-index-add-file: ~a: ~a" filename retcode)
              (error "eccodes: ~a: ~a" filename message))))
-        (get-uv-steps-from-index index u-and-v-var)))))
+        (let ((uvdata (get-uv-steps-from-index index u-and-v-var)))
+          (dolist (uv uvdata)
+            (let ((step (uv-step uv)))
+              (setf (gethash (get-key datasource step) *forecast-ht*) uv))))))))
 
-(defun find-file-for-spec (&key source cycle offset resolution)
-  (let ((dest-path (forecast-destpath :source source :cycle cycle :offset offset :resolution resolution)))
-    (if (probe-file dest-path)
-        (namestring dest-path)
-        (let ((archive-path  (noaa-archivepath :cycle cycle :offset offset :resolution resolution)))
-          (if (probe-file archive-path)
-              (namestring archive-path)
-              (error 'missing-forecast :cycle cycle :offset offset :resolution resolution :filename dest-path))))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Get forecast collection for area
-
-(defstruct fcdata north south west east start end increment cycle resolution values) 
+(defmethod load-datasource-forecasts ((datasource fw-current) step)
+  (let* ((file-step (file-step datasource step))
+         (filename (namestring (local-pathname datasource file-step)))
+         (u-and-v-var (uv-variables datasource)))
+    (log2:info "Loading forecast ~a~%" filename)
+    (let ((uvdata (get-messages-from-file filename)))
+      (dolist (uv uvdata)
+        (let ((step (uv-step uv)))
+          (log2:trace "loading ~a step ~a" datasource step)
+          (setf (gethash (get-key datasource step) *forecast-ht*) uv))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Cleanup forecast HT to avoid memory exhaustion
@@ -68,15 +69,15 @@ Filename is determined by FIND-FILE-FOR-SPEC."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
 
-(defun noaa-start-forecast-ht-cleanup ()
+(defun start-forecast-ht-cleanup ()
   (log2:info "Starting forecast cleanup thread")
   (setf *forecast-cleanup-timer*
-        (timers:add-timer #'noaa-forecast-ht-cleanup
+        (timers:add-timer #'forecast-ht-cleanup
                           :id "FORECAST-CLEANUP"
                           :hours '(5 11 17 23)
                           :minutes '(10))))
 
-(defun noaa-forecast-ht-cleanup ()
+(defun forecast-ht-cleanup ()
   (let* ((expiry (adjust-timestamp (now) (:offset :hour -12))))
     (bordeaux-threads:with-lock-held (+forecast-ht-lock+)
       (log2:info "Searching hash entries older than ~a" (format-timestring nil expiry))

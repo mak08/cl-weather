@@ -1,59 +1,85 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2017
-;;; Last Modified <michael 2025-12-30 22:25:29>
+;;; Last Modified <michael 2026-01-31 21:41:02>
 
 (in-package :cl-weather)
 
+(defun get-messages-from-file (file)
+  (let ((fp (fopen file "ro")))
+    (handler-case
+        (let
+            ((n (codes-count-in-file fp)))
+          (log2:trace "Messages: ~a~%" n)
+          (loop
+            :for k :below n :by 2
+            :collect (let ((u (codes-grib-handle-new-from-file fp))
+                           (v (codes-grib-handle-new-from-file fp)))
+                       (with-bindings (((u-data-time u-offset u-message-info u-values)
+                                        (read-grib-message u))
+                                       ((v-data-time v-offset v-message-info v-values)
+                                        (read-grib-message v)))
+                         (make-uv :info u-message-info
+                                  :vars nil
+                                  :basetime u-data-time
+                                  :cycle u-data-time
+                                  :offset (* u-offset 60)
+                                  :step u-offset
+                                  :u-array u-values
+                                  :v-array v-values)))))
+      (error (e)
+        (format t "Error: ~a~%" e)
+        (fclose fp)))))
+
+(defun read-grib-message (handle)
+  (let ((parameter
+          (codes-get-string handle "parameterName"))
+        (number
+          (codes-get-long handle "parameterNumber"))
+        (data-time
+          (read-data-datetime handle))
+        (offset (codes-get-long handle "forecastTime"))
+        (message-info
+          (read-message-info handle))
+        (values
+          (codes-get-double-array handle "values")))
+    (log2:trace "Parameter=~a:~a Time=~a:~a" number parameter data-time offset)
+    (values data-time
+            offset
+            message-info
+            values)))
+
 (defun get-uv-steps-from-index (index u-and-v-var)
   (let* ((steps 
-          (codes-index-get-long index "step"))
+           (codes-index-get-long index "step"))
          (shortNames
-          (codes-index-get-string index "shortName"))
-         (forecasts
-          (make-array (length steps)))
-         (result
-          (make-dataset)))
-    
+           (codes-index-get-string index "shortName")))
     (log2:trace "Index steps (~a): ~a" (length steps) steps)
     (destructuring-bind (u-var v-var)
         u-and-v-var
       (loop
         :for i :from 0
         :for step :across steps
-        :do (progn
-              (codes-index-select-long index "step" step)
-              (with-bindings (((u-data-time u-offset u-message-info u-values)
-                               (select-and-read-message index u-var))
-                              ((v-data-time v-offset v-message-info v-values)
-                               (select-and-read-message index v-var)))
-                (setf (dataset-basetime result) u-data-time)
-                (setf (dataset-info result) u-message-info)
-                (setf (aref forecasts i)
-                      (make-uv :dataset result
-                               :cycle u-data-time
-                               :offset (* u-offset 60)
-                               :step step
-                               :u-array u-values
-                               :v-array v-values))))))
-    (setf (dataset-forecasts result) forecasts)
-    (values
-     result)))
+        :collect
+        (progn
+          (codes-index-select-long index "step" step)
+          (with-bindings (((u-data-time u-offset u-message-info u-values)
+                           (select-and-read-message index u-var))
+                          ((v-data-time v-offset v-message-info v-values)
+                           (select-and-read-message index v-var)))
+            (make-uv :info u-message-info
+                     :vars u-and-v-var
+                     :basetime u-data-time
+                     :cycle u-data-time
+                     :offset (* u-offset 60)
+                     :step step
+                     :u-array u-values
+                     :v-array v-values)))))))
 
 (defun select-and-read-message (index varname)
   (codes-index-select-string index "shortName" varname)
   (with-handle-from-index (handle index)
-    (let ((data-time
-           (read-data-datetime handle))
-          (offset (codes-get-long handle "forecastTime"))
-          (message-info
-           (read-message-info handle))
-          (values
-           (codes-get-double-array handle "values")))
-      (values data-time
-              offset
-              message-info
-              values))))
+    (read-grib-message handle)))
 
 (defun read-data-datetime (message)
   (let ((date

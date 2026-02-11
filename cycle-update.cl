@@ -1,58 +1,39 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2025-09-14 12:03:23>
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; ================
-;;; Periodic updates
-;;; ================
+;;; Last Modified <michael 2026-02-11 21:11:14>
 
 (in-package "CL-WEATHER")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;
+;;; Periodic updates
 
-(defvar *noaa-download-timer*)
 (defvar *cleanup-timer*)
+(defvar *datasources* '(noaa-gfs-wind ecmwf-ifs-wind ecmwf-aifs-wind fw-current-agulhas))
 
-(defun start-cycle-updates (&key (resolution '("1p00")) (load-previous *load-previous*) (max-offset 384))
-  ;; Force download of previous cycle - even if the latest available cycle is complete,
-  ;; previous cycle may still be needed for interpolation.
-  (when load-previous
-    (bordeaux-threads:make-thread
-     (lambda ()
-       (download-cycle (previous-cycle (available-cycle (now))) :max-offset max-offset :resolution resolution))
-     :name "NOAA-UPDATE"))
-  
+(defun start-cycle-updates ()
   ;; Download the latest complete cycle
-  (bordeaux-threads:make-thread
-   (lambda ()
-     (download-cycle (latest-complete-cycle) :max-offset max-offset :resolution resolution))
-   :name "NOAA-UPDATE")
-
+  (dolist (datasource *datasources*)
+    (cl-weather::download-datasource
+     (get-datasource datasource (latest-complete-cycle datasource))
+     :async :datasource))
   ;; When a cycle is currently being output, start download immediately
-  (when (cycle-updating-p)
-    (bordeaux-threads:make-thread
-     (lambda ()
-       (download-cycle (current-cycle) :resolution resolution :max-offset max-offset :if-missing :wait))
-     :name "NOAA-UPDATE"))
+  (dolist (datasource *datasources*)
+    (when (cycle-updating-p datasource)
+      (cl-weather::download-datasource
+       (get-datasource datasource (current-cycle datasource))
+       :async :datasource)))
 
-  ;; NOW we can leave it to the 4/24 update. 
-  (setf *noaa-download-timer*
-        (timers:add-timer (lambda ()
-                            (download-cycle (current-cycle) :resolution resolution :max-offset max-offset :if-missing :wait))
-                          :id (format nil "GFS-~a-UPDATE-NOAA" resolution)
-                          :hours '(3 9 15 21)
-                          :minutes '(30)))
+  ;; Now we can leave it to the 4/24 update. 
+  (dolist (datasource *datasources*)
+    (cl-weather::schedule-download datasource))
   (setf *cleanup-timer*
         (timers:add-timer (lambda ()
                             (cleanup-cycles :dry-run nil))
                           :id (format nil "CLEANUP-CYCLES" resolution)
                           :hours '(3 9 15 21)
                           :minutes '(10)))
-  (noaa-start-forecast-ht-cleanup))
+  (start-forecast-ht-cleanup))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -1,12 +1,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2025-12-28 22:30:58>
+;;; Last Modified <michael 2026-02-11 22:29:44>
 
 (in-package :cl-weather)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;
+;;; Conditions
 
 (define-condition weather-condition (error)
   ((cycle :initarg :cycle :reader cycle)
@@ -46,9 +46,10 @@
 ;;; TODO: Use struct CYCLE throughout to specify the forecast cycle
 (defstruct (cycle (:constructor make-cycle%)) timestamp)
 
-(defun make-cycle (&key (timestamp (now)))
+(defun make-cycle (&key (timestamp (now)) (interval (* 6 60 60)) (delay 0))
+  "The latest cycle that is or becomes available, assuming 4x6 schedule."
   (let* ((seconds (timestamp-to-unix timestamp))
-         (cycle-seconds (* 6 3600 (floor seconds (* 6 3600)))))
+         (cycle-seconds (* interval (floor (- seconds delay) interval))))
     (make-cycle% :timestamp (unix-to-timestamp cycle-seconds))))
 
 (defun cycle-offset (cycle timestamp)
@@ -78,23 +79,6 @@
 
 (defmethod print-object ((thing cycle) stream)
   (format stream "~a" (cycle-string thing))) 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;
-
-(defstruct dataset
-  basetime                              ; Base time of forecast data
-  info                                  ; Grid description
-  forecasts                             ; Array of uv data
-  )
-
-(defun dataset-cycle (dataset)
-  (make-cycle :timestamp (dataset-basetime dataset)))
-
-(defmethod print-object ((thing dataset) stream)
-  (format stream "{dataset base=~a forecasts=~a}"
-          (format-datetime nil (dataset-basetime thing))
-          (dataset-forecasts thing)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Interpolation parameters
@@ -127,7 +111,6 @@
           (params-fc1 thing)
           (params-merge-start thing)
           (params-merge-duration thing)))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; GRIB Info
@@ -172,16 +155,18 @@
 ;;; Forecast data
 
 (defstruct uv
-  dataset                               ; Back reference 
+  info                                  ; units?, borders, incremements, scan directions
+  vars                                  ; wind or current
+  basetime                              ; cycle time
   (cycle  nil :read-only t)             ; Time when forecast was created
   offset                                ; Offset of forecast data w.r.t. dataset basetime
   step                                  ; Step - for debugging
-  u-array                               ; U component of wind
-  v-array                               ; V component of wind 
+  u-array                               ; U component
+  v-array                               ; V component
   )
 
 (defun uv-forecast-time (uv)
-  (adjust-timestamp (dataset-basetime (uv-dataset uv)) (offset :minute (uv-offset uv))))
+  (adjust-timestamp (uv-basetime uv) (offset :minute (uv-offset uv))))
 
 (defmethod print-object ((thing uv) stream)
   (format stream "{UV T=~a C=~a n=~a}"
@@ -199,10 +184,8 @@
           (enorm (wind-u thing) (wind-v thing))
           (angle (wind-u thing) (wind-v thing))))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
-
 
 (declaim (inline normalized-lat))
 (defun-t normalized-lat double-float ((lat double-float))
@@ -222,22 +205,31 @@
         (t
          lng)))
 
+(define-condition latlon-out-of-bounds (condition)
+  ((lat :reader lat :initarg :lat)
+   (lon :reader lon :initarg :lon))
+  (:report
+   (lambda (condition stream)
+     (format stream "Position ~a,~a out of bounds for GRIB" (lat condition) (lon condition)))))
+
 (defun uv-index (info lat lon)
-  (let*
-      ((j-scan-pos-p (eql (gribinfo-j-scan-pos info) 1))
-       (i-inc (gribinfo-i-inc info))
-       (j-inc (gribinfo-j-inc info))
-       (lat0 (gribinfo-lat-start info))
-       (lon0 (gribinfo-lon-start info))
-       (olat (if j-scan-pos-p (- lat lat0) (- lat0 lat)))
-       (olon (- lon lon0))
-       (lat-index (floor olat j-inc))
-       (lon-index (floor olon i-inc))
-       (lonpoints (gribinfo-lon-points info))
-       (lat-offset (* lat-index lonpoints))
-       (uv-index (+ lat-offset lon-index)))
-    (log2:trace "Lat: ~a Lng: ~a Index: ~a" lat lon uv-index)
-    uv-index))
+  (let ((lat-start (gribinfo-lat-start info))
+        (lat-end (gribinfo-lat-end info))
+        (lon-start (gribinfo-lon-start info))
+        (lon-end (gribinfo-lon-end info))
+        (j-scan-pos-p (eql (gribinfo-j-scan-pos info) 1)))
+    (let* ((i-inc (gribinfo-i-inc info))
+           (j-inc (gribinfo-j-inc info))
+           (lat0 (gribinfo-lat-start info))
+           (lon0 (gribinfo-lon-start info))
+           (olat (if j-scan-pos-p (- lat lat0) (- lat0 lat)))
+           (olon (- lon lon0))
+           (lat-index (floor olat j-inc))
+           (lon-index (floor olon i-inc))
+           (lonpoints (gribinfo-lon-points info))
+           (lat-offset (* lat-index lonpoints))
+           (uv-index (+ lat-offset lon-index)))
+      uv-index)))
 
 (defun dataset-forecast (dataset)
   (aref (dataset-forecasts dataset) 0))
@@ -280,99 +272,6 @@
   (if (iparams-previous iparams)
       (params-base-time (iparams-previous iparams))
       (params-base-time (iparams-current iparams))))
-
-(defun prediction-parameters (timestamp &key
-                                          method
-                                          merge-start
-                                          merge-duration
-                                          (source :noaa)
-                                          (cycle (available-cycle timestamp))
-                                          (resolution "0p25")
-                                          (retry 1))
-  ;; If $date is provided, $cycle must also be provided, and the specified forecast will be used.
-  ;; Otherwise, the latest available forecast will be used.
-  ;; ### ToDo ### The $next-fc may not be available yet!
-  (log2:trace "timestamp:~a cycle:~a" timestamp cycle)
-  (handler-case
-      (let* ((forecast (cycle-forecast cycle timestamp))
-             (next-fc (next-forecast forecast))
-             (ds0 (if (and (eq source :vr) (< forecast 9))
-                      (load-forecast :source source :cycle (previous-cycle cycle) :offset (+ forecast 6) :resolution resolution)
-                      (load-forecast :source source :cycle cycle :offset forecast :resolution resolution)))
-             (ds1  (if (and (eq source :vr) (< next-fc 9))
-                       (load-forecast :source source :cycle (previous-cycle cycle) :offset (+ next-fc 6) :resolution resolution)
-                       (load-forecast :source source :cycle cycle :offset next-fc :resolution resolution)))
-             (fc0 (dataset-forecast ds0))
-             (fc1 (dataset-forecast ds1))
-             (fraction (forecast-fraction fc0 fc1 timestamp))
-             (info (dataset-info ds0)))
-        (log2:trace "next-fc ~a method ~a" next-fc method)
-        (make-params :info info
-                     :timestamp timestamp
-                     :base-time (cycle-timestamp (if (< forecast 9) (previous-cycle cycle) cycle))
-                     :method method
-                     :merge-start merge-start
-                     :merge-duration merge-duration
-                     :forecast forecast
-                     :next-fc next-fc
-                     :fc0 fc0
-                     :fc1 fc1
-                     :fraction fraction))
-    (missing-forecast (c)
-      (progn
-        (log2:error "~a"c)
-        (if (> retry 0)
-            (prediction-parameters timestamp
-                                   :method method
-                                   :merge-start merge-start
-                                   :merge-duration merge-duration
-                                   :source source
-                                   :cycle (previous-cycle cycle)
-                                   :resolution resolution
-                                   :retry (1- retry))
-            (error c))))))
-
-
-(defun interpolation-parameters (timestamp &key
-                                             (source :noaa)
-                                             (method :vr)
-                                             (merge-start 0d0)
-                                             (merge-duration 0d0)
-                                             (cycle (available-cycle timestamp))
-                                             (resolution "1p00"))
-  (log2:trace-more "S:~a C:~a R:~a M:~a U:~a+~a T:~a" source cycle resolution method merge-start merge-duration timestamp)
-  (let* ((cycle1 (or cycle (available-cycle timestamp)))
-         (cycle0 (previous-cycle cycle1))
-         (merge-start-ts (adjust-timestamp (cycle-timestamp cycle1) (offset :minute (round (* merge-start 60)))))
-         (merge-end-ts  (adjust-timestamp merge-start-ts (offset :minute (round (* merge-duration 60)))))
-         (merge-duration (timestamp-difference merge-end-ts merge-start-ts))
-         (merge-fraction (if (= merge-duration 0)
-                             0d0
-                             (coerce (/ (timestamp-difference timestamp merge-start-ts) merge-duration) 'double-float)))
-         (offset (cycle-offset cycle1 timestamp))
-         (current
-           (when (timestamp>= timestamp merge-start-ts)
-             (prediction-parameters timestamp
-                                    :method method
-                                    :source source
-                                    :cycle cycle1
-                                    :resolution resolution)))
-         (previous
-           (when (timestamp< timestamp merge-end-ts)
-             (prediction-parameters timestamp
-                                    :method method
-                                    :source source
-                                    :cycle cycle0
-                                    :resolution resolution))))
-    (when (and current previous)
-      (log2:trace "Merging ~a ~a ~a ~a" timestamp merge-start-ts merge-duration merge-fraction))
-
-    (log2:trace "S:~a  E: ~a" merge-start-ts merge-end-ts)
-    (log2:trace "C:~a  P: ~a" current previous)
-    (make-iparams :current current
-                  :previous previous
-                  :merge-fraction merge-fraction
-                  :offset offset)))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
