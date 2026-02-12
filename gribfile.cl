@@ -1,12 +1,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2017
-;;; Last Modified <michael 2026-01-31 21:41:02>
+;;; Last Modified <michael 2026-02-12 19:39:44>
 
 (in-package :cl-weather)
 
 (defun get-messages-from-file (file)
-  (let ((fp (fopen file "ro")))
+  (with-c-file (fp file "ro")
     (handler-case
         (let
             ((n (codes-count-in-file fp)))
@@ -28,8 +28,7 @@
                                   :u-array u-values
                                   :v-array v-values)))))
       (error (e)
-        (format t "Error: ~a~%" e)
-        (fclose fp)))))
+        (values nil)))))
 
 (defun read-grib-message (handle)
   (let ((parameter

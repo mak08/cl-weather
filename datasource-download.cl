@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   GRIB data sources
 ;;; Author        Michael Kappert 2019
-;;; Last Modified <michael 2026-02-09 20:54:41>
+;;; Last Modified <michael 2026-02-12 19:33:42>
 
 (in-package "CL-WEATHER")
 
@@ -164,7 +164,7 @@ asynchronously."
                             (http-response-status response)))
               (status-text (http-status-text
                             (http-response-status response))))
-         (log2:trace "~a => ~a" url body)
+         (log2:trace-more "~a => ~a" url body)
          (cond
            ((= status-code 200)
             (return-from retrieve-index-file body))
