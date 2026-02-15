@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   GRIB data sources
 ;;; Author        Michael Kappert 2019
-;;; Last Modified <michael 2026-02-11 22:28:45>
+;;; Last Modified <michael 2026-02-15 02:06:57>
 
 (in-package "CL-WEATHER")
 
@@ -235,8 +235,11 @@ when the cycle was determined."))
 ;;; Default methods
 
 (defmethod previous-cycle ((datasource t) cycle)
+  (move-cycle :hours -6))
+
+(defun move-cycle (cycle &key hours)
   (let ((timestamp (cycle-timestamp cycle)))
-    (make-cycle :timestamp (adjust-timestamp timestamp (offset :hour -6)))))
+    (make-cycle :timestamp (adjust-timestamp timestamp (offset :hour hours)))))
   
 (defmethod cycle-updating-p ((datasource t) &optional (time (now)))
   (< 210 (mod (day-minute time) 360) 300))
@@ -256,7 +259,8 @@ when the cycle was determined."))
   ;; after the forecast computation starts.
   (let ((24h (* 24 60 60)))
     (make-cycle :timestamp (universal-to-timestamp
-                            (* 24h (floor (timestamp-to-universal (now)) 24h))))))
+                            (* 24h (floor (timestamp-to-universal
+                                           (adjust-timestamp (now) (offset :hour -12))) 24h))))))
 
 (defmethod latest-complete-cycle ((datasource (eql 'fw-current-agulhas)) &optional (time (now)))
   ;; Determine the latest cycle that should'be complete (theoretically) at the given time
