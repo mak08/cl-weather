@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   GRIB data sources
 ;;; Author        Michael Kappert 2019
-;;; Last Modified <michael 2026-02-12 19:33:42>
+;;; Last Modified <michael 2026-02-14 21:06:12>
 
 (in-package "CL-WEATHER")
 
@@ -46,7 +46,7 @@
       (otherwise
        (bordeaux-threads:make-thread #'download-fn :name "DATASOURCE-DOWNLOAD")))))
 
-(defmethod download-step ((datasource datasource) step &key (retries 50) (async nil))
+(defmethod download-step ((datasource datasource) step &key (retries 180) (async nil))
   "Download a single step from the datasource. Signal a MISSING-GRIB
 error if the source grib was not available. If RETRY is true, retry
 after 30s for max. 90min before giving up. If ASYNC is true, run
