@@ -1,34 +1,33 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2017
-;;; Last Modified <michael 2026-02-12 19:39:44>
+;;; Last Modified <michael 2026-02-14 22:50:27>
 
 (in-package :cl-weather)
 
 (defun get-messages-from-file (file)
   (with-c-file (fp file "ro")
-    (handler-case
-        (let
-            ((n (codes-count-in-file fp)))
-          (log2:trace "Messages: ~a~%" n)
-          (loop
-            :for k :below n :by 2
-            :collect (let ((u (codes-grib-handle-new-from-file fp))
-                           (v (codes-grib-handle-new-from-file fp)))
-                       (with-bindings (((u-data-time u-offset u-message-info u-values)
-                                        (read-grib-message u))
-                                       ((v-data-time v-offset v-message-info v-values)
-                                        (read-grib-message v)))
-                         (make-uv :info u-message-info
-                                  :vars nil
-                                  :basetime u-data-time
-                                  :cycle u-data-time
-                                  :offset (* u-offset 60)
-                                  :step u-offset
-                                  :u-array u-values
-                                  :v-array v-values)))))
-      (error (e)
-        (values nil)))))
+    (when (null-pointer-p fp)
+      (error 'missing-file :filename file))
+    (let
+        ((n (codes-count-in-file fp)))
+      (log2:trace "Messages: ~a~%" n)
+      (loop
+        :for k :below n :by 2
+        :collect (let ((u (codes-grib-handle-new-from-file fp))
+                       (v (codes-grib-handle-new-from-file fp)))
+                   (with-bindings (((u-data-time u-offset u-message-info u-values)
+                                    (read-grib-message u))
+                                   ((v-data-time v-offset v-message-info v-values)
+                                    (read-grib-message v)))
+                     (make-uv :info u-message-info
+                              :vars nil
+                              :basetime u-data-time
+                              :cycle u-data-time
+                              :offset (* u-offset 60)
+                              :step u-offset
+                              :u-array u-values
+                              :v-array v-values)))))))
 
 (defun read-grib-message (handle)
   (let ((parameter

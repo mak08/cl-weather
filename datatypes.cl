@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2026-02-11 22:29:44>
+;;; Last Modified <michael 2026-02-14 22:50:02>
 
 (in-package :cl-weather)
 
@@ -17,6 +17,12 @@
    (lambda (c s)
      (declare (ignore c))
      (format s "weather-condition"))))
+
+(define-condition missing-file (error)
+  ((filename :initarg :filename :reader filename :initform "<not provided>" ))
+  (:report
+   (lambda (c s)
+     (format s "Missing file ~a" (filename c)))))
 
 (define-condition missing-forecast (weather-condition)
   ()
