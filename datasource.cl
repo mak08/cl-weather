@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   GRIB data sources
 ;;; Author        Michael Kappert 2019
-;;; Last Modified <michael 2026-02-15 02:06:57>
+;;; Last Modified <michael 2026-02-16 23:17:01>
 
 (in-package "CL-WEATHER")
 
@@ -119,9 +119,18 @@ The cycle-run must be a valid run for the datasource when making a datasource in
   (:documentation
    "Determine the latest cycle that should'be complete (theoretically) at the given time"))
 
+(defgeneric timestamp-cycle (datasource timestamp)
+  (:documentation
+   "EQL methods on datasource name to determine which cycle to use at timestamp.
+"))
+
 (defgeneric current-cycle (datasource)
   (:documentation
    "Cycle currently used by the router."))
+
+(defgeneric previous-cycle (datasource cycle))
+
+(defgeneric cycle-updating-p (datasource &optional time))
 
 (defgeneric cycle-forecast (datasource timestamp)
   (:documentation
@@ -130,16 +139,6 @@ The cycle-run must be a valid run for the datasource when making a datasource in
 (defgeneric next-forecast (datasource forecast)
   (:documentation
    "The next step/offset"))
-
-(defgeneric previous-cycle (datasource cycle))
-
-(defgeneric cycle-updating-p (datasource &optional time))
-
-(defgeneric timestamp-cycle (datasource timestamp)
-  (:documentation
-   "EQL methods on datasource name to determine which cycle to use at timestamp.
-Datasource constructors require the cycle as an argument. The datasource can only be instantiated
-when the cycle was determined."))
 
 (defgeneric download-datasource (datasource &key)
   (:documentation

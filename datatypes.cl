@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2026-02-14 22:50:02>
+;;; Last Modified <michael 2026-03-16 22:13:09>
 
 (in-package :cl-weather)
 
@@ -39,6 +39,13 @@
              (cycle c)
              (offset c)
              (resolution c)))))
+
+(define-condition latlon-out-of-bounds (condition)
+  ((lat :reader lat :initarg :lat)
+   (lon :reader lon :initarg :lon))
+  (:report
+   (lambda (condition stream)
+     (format stream "Position ~a,~a out of bounds for GRIB" (lat condition) (lon condition)))))
            
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Forecast set
@@ -95,29 +102,6 @@
       (params-method  (iparams-current iparams))
       (params-method  (iparams-previous iparams))))
 
-(defstruct params
-  timestamp
-  base-time
-  forecast
-  next-fc
-  (method :vr)
-  merge-start
-  merge-duration
-  info
-  fc0
-  fc1
-  fraction)
-
-(defmethod print-object ((thing params) stream)
-  (format stream "{PARAMS T:~a C:~a F:~,2f F0:~a F1:~a M:~a+~a}"
-          (format-ddhhmm nil (params-timestamp thing))
-          (format-timestamp-as-cycle nil (params-base-time thing))
-          (params-fraction thing)
-          (params-fc0 thing)
-          (params-fc1 thing)
-          (params-merge-start thing)
-          (params-merge-duration thing)))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; GRIB Info
 
@@ -134,28 +118,6 @@
           (gribinfo-grid-size thing)
           (gribinfo-i-inc thing)
           (gribinfo-j-inc thing)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; ==============
-;;; Class forecast
-;;; ==============
-;;; A forecast represents forecast data for a specific point in time.
-;;; Wind speed and direction for any point in the covered area can be obtained
-;;; from a forecast, but the actual values are computed only on demand.
-
-(defclass forecast ()
-  ((fc-dataset :reader fc-dataset :initarg :dataset)
-   (fc-time :reader fc-time :initarg :time)
-   (fc-offset :reader fc-offset :initarg :offset :documentation "Offset from dataset basetime in minutes")
-   (fc-hash :accessor fc-hash% :initform (make-hash-table))))
-
-(defmethod print-object ((thing forecast) stream)
-  (let ((cycle (dataset-cycle (fc-dataset thing))))
-    (format stream "{FC @ ~a, Offset ~a, Cycle ~a|~a}"
-            (format-datetime nil (fc-time thing))
-            (fc-offset thing)
-            (cycle-datestring cycle)
-            (cycle-run cycle))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Forecast data
@@ -211,13 +173,7 @@
         (t
          lng)))
 
-(define-condition latlon-out-of-bounds (condition)
-  ((lat :reader lat :initarg :lat)
-   (lon :reader lon :initarg :lon))
-  (:report
-   (lambda (condition stream)
-     (format stream "Position ~a,~a out of bounds for GRIB" (lat condition) (lon condition)))))
-
+(declaim (inline uv-index))
 (defun uv-index (info lat lon)
   (let ((lat-start (gribinfo-lat-start info))
         (lat-end (gribinfo-lat-end info))
@@ -240,6 +196,7 @@
 (defun dataset-forecast (dataset)
   (aref (dataset-forecasts dataset) 0))
 
+(declaim (inline forecast-fraction))
 (defun forecast-fraction (fc0 fc1 timestamp)
   (let ((fraction
           (duration-fraction (uv-forecast-time fc0)
@@ -248,7 +205,7 @@
     (log2:trace "fc0:~a fc1:~a Fraction: ~a" fc0 fc1 fraction)
     fraction))
     
-
+(declaim (inline duration-fraction))
 (defun duration-fraction (ts0 ts1 ts)
   (let ((delta (timestamp-difference ts1 ts0))
         (s0 (timestamp-difference ts ts0)))
@@ -268,16 +225,8 @@
     (values u v)))
 (declaim (notinline grib-get-uv))
 
-(defmethod print-object ((ts timestamp) stream)
+(defmethod print-object ((ts local-time:timestamp) stream)
   (format-datetime stream ts))
-
-(defun base-time (iparams)
-  (params-base-time (iparams-current iparams)))
-
-(defun iparams-effective-cycle (iparams)
-  (if (iparams-previous iparams)
-      (params-base-time (iparams-previous iparams))
-      (params-base-time (iparams-current iparams))))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
