@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2017
-;;; Last Modified <michael 2026-02-14 22:50:27>
+;;; Last Modified <michael 2026-03-16 21:38:30>
 
 (in-package :cl-weather)
 
@@ -92,19 +92,27 @@
                               (rem time 100)))))
 
 (defun read-message-info (message)
-  (make-gribinfo
-   :grid-size (codes-get-size message "values")
-   :step-units (codes-get-long message "stepUnits")
-   :lat-points (codes-get-long message "numberOfPointsAlongAMeridian")
-   :lon-points (codes-get-long message "numberOfPointsAlongAParallel")
-   :lat-start (coerce (codes-get-long message "latitudeOfFirstGridPointInDegrees") 'double-float)
-   :lat-end (coerce (codes-get-long message "latitudeOfLastGridPointInDegrees") 'double-float)
-   :lon-start (coerce (codes-get-long message "longitudeOfFirstGridPointInDegrees") 'double-float)
-   :lon-end (coerce (codes-get-long message "longitudeOfLastGridPointInDegrees") 'double-float)
-   :j-inc (codes-get-double message "jDirectionIncrementInDegrees") ; "south to north"
-   :i-inc (codes-get-double message "iDirectionIncrementInDegrees") ; "west to east"
-   :j-scan-pos (codes-get-long message "jScansPositively")
-   :i-scan-neg  (codes-get-long message "iScansNegatively")))
+  (let ((lon-start (coerce (codes-get-double message "longitudeOfFirstGridPointInDegrees") 'double-float))
+        (lon-end (coerce (codes-get-double message "longitudeOfLastGridPointInDegrees") 'double-float))
+        (j-inc (codes-get-double message "jDirectionIncrementInDegrees")) ; "south to north"
+        (i-inc (codes-get-double message "iDirectionIncrementInDegrees")) ; "west to east"
+        )
+    (when (= 0d0 (mod (incf lon-end i-inc) 360) lon-start)
+      (log2:trace "wrap around grib")
+      (setf lon-end 360d0))
+    (make-gribinfo
+     :grid-size (codes-get-size message "values")
+     :step-units (codes-get-long message "stepUnits")
+     :lat-points (codes-get-long message "numberOfPointsAlongAMeridian")
+     :lon-points (codes-get-long message "numberOfPointsAlongAParallel")
+     :lat-start (coerce (codes-get-double message "latitudeOfFirstGridPointInDegrees") 'double-float)
+     :lat-end (coerce (codes-get-double message "latitudeOfLastGridPointInDegrees") 'double-float)
+     :lon-start lon-start
+     :lon-end lon-end
+     :j-inc j-inc
+     :i-inc i-inc
+     :j-scan-pos (codes-get-long message "jScansPositively")
+     :i-scan-neg  (codes-get-long message "iScansNegatively"))))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
