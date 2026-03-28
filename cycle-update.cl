@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2026-02-11 21:11:14>
+;;; Last Modified <michael 2026-03-19 22:05:26>
 
 (in-package "CL-WEATHER")
 
@@ -27,12 +27,7 @@
   ;; Now we can leave it to the 4/24 update. 
   (dolist (datasource *datasources*)
     (cl-weather::schedule-download datasource))
-  (setf *cleanup-timer*
-        (timers:add-timer (lambda ()
-                            (cleanup-cycles :dry-run nil))
-                          :id (format nil "CLEANUP-CYCLES" resolution)
-                          :hours '(3 9 15 21)
-                          :minutes '(10)))
+
   (start-forecast-ht-cleanup))
 
 ;;; EOF
