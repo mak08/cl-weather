@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2026-02-11 21:47:18>
+;;; Last Modified <michael 2026-03-28 20:19:30>
 
 (declaim (optimize (speed 3) (debug 1) (space 1) (safety 1)))
 
@@ -72,6 +72,8 @@
               (s (linear fraction s-0 s-1)))
          (values a s u v)))))
 
+
+(declaim (inline valid-position))
 (defun valid-position (lat lon info)
   (let ((lat-start (gribinfo-lat-start info))
         (lat-end (gribinfo-lat-end info))
@@ -95,7 +97,7 @@
       ((valid-position lat lon (uv-info fc-0))
        (get-values fraction lat lon fc-0 fc-1))
       (t
-       (values 0d0 0d0)))))
+       (values 0d0 0d0 0d0 0d0)))))
 
 (defun get-wind-fw (datasource timestamp lat lon)
   (multiple-value-bind (d s)
