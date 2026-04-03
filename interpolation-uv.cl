@@ -1,31 +1,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2026-03-28 20:19:30>
+;;; Last Modified <michael 2026-04-03 16:03:32>
 
 (declaim (optimize (speed 3) (debug 1) (space 1) (safety 1)))
 
-
 (in-package "CL-WEATHER")
-
-(defstruct params-fw fc0 fc1 fraction)
-
-(defun get-params (datasource timestamp
-                   &key
-                     (cycle (timestamp-cycle datasource timestamp)))
-  (handler-case
-      (get-params-for-cycle datasource timestamp :cycle cycle)
-    (missing-forecast (e)
-      (get-params-for-cycle datasource timestamp :cycle (previous-cycle datasource cycle)))))
-      
-(defun get-params-for-cycle (datasource-classname timestamp &key cycle)
-  (let* ((datasource (get-datasource datasource-classname cycle))
-         (step-0 (cycle-forecast datasource timestamp))
-         (step-1 (next-forecast datasource step-0))
-         (fc-0 (load-forecast datasource step-0))
-         (fc-1 (load-forecast datasource step-1))
-         (fraction (forecast-fraction fc-0 fc-1 timestamp)))
-    (make-params-fw :fc0 fc-0 :fc1 fc-1 :fraction fraction)))
 
 (declaim (inline get-values))
 (defun get-values (fraction lat lon fc-0 fc-1)
@@ -72,36 +52,23 @@
               (s (linear fraction s-0 s-1)))
          (values a s u v)))))
 
-
-(declaim (inline valid-position))
-(defun valid-position (lat lon info)
-  (let ((lat-start (gribinfo-lat-start info))
-        (lat-end (gribinfo-lat-end info))
-        (lon-start (gribinfo-lon-start info))
-        (lon-end (gribinfo-lon-end info))
-        (j-scan-pos-p (eql (gribinfo-j-scan-pos info) 1)))
-    (and (if j-scan-pos-p
-             (<= lat-start lat lat-end)
-             (<= lat-end lat lat-start))
-         (<= lon-start (mod lon 360) lon-end))))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; API
 
-(declaim (inline interpolate-fw))
-(defun interpolate-fw (lat lon params)
-  (let ((fc-0 (params-fw-fc0 params))
-        (fc-1 (params-fw-fc1 params))
-        (fraction (params-fw-fraction params)))
+(declaim (inline interpolate-uv))
+(defun interpolate-uv (lat lon params)
+  (let ((fc-0 (params-fc0 params))
+        (fc-1 (params-fc1 params))
+        (fraction (params-fraction params)))
     (cond
       ((valid-position lat lon (uv-info fc-0))
        (get-values fraction lat lon fc-0 fc-1))
       (t
        (values 0d0 0d0 0d0 0d0)))))
 
-(defun get-wind-fw (datasource timestamp lat lon)
+(defun get-wind (datasource timestamp lat lon)
   (multiple-value-bind (d s)
-      (interpolate-fw lat lon (get-params datasource timestamp))
+      (interpolate-uv lat lon (get-params datasource timestamp))
     (values d (m/s-to-knots s))))
   
 ;;; EOF

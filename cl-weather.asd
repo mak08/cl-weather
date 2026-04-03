@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2026-02-11 22:28:59>
+;;; Last Modified <michael 2026-04-03 11:56:37>
 
 (defsystem "cl-weather"
   :description "Load and prepare weather data"
@@ -15,12 +15,16 @@
                (:file "datatypes")
                (:file "gribfile")
                (:file "datasource")
+               (:file "fw-datasource")
+               (:file "fw-currents")
+               (:file "fw-waves")
                (:file "datasource-download")
                (:file "download")
                (:file "cycle-update")
                (:file "forecast")
-               (:file "prediction")
-               (:file "prediction-fw")
+               (:file "interpolation-params")
+               (:file "interpolation-simple")
+               (:file "interpolation-uv")
                (:file "tiles")))
 
 ;;; EOF

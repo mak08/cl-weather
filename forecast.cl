@@ -1,15 +1,15 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   Access to NOAA forecasts (non-interpolated)
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2026-02-11 20:46:40>
+;;; Last Modified <michael 2026-04-03 01:39:07>
 
 (in-package "CL-WEATHER")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Loading forecast data
 
-(defun load-forecast (datasource step)
-  "Return requested U/V data. Cached."
+(defmethod load-forecast (datasource step)
+  "Return requested U/V data from Cache, fill cache if needed."
   (let ((max (maxstep datasource)))
     (when (> step max)
       (log2:warning "Step ~a out of range, using max (~a)" step max)
@@ -17,6 +17,8 @@
     (let* ((key (get-key datasource step)))
       (bordeaux-threads:with-lock-held (+forecast-ht-lock+)
         (unless (gethash key *forecast-ht*)
+          ;; LOAD-DATASOURCE-FORECASTS loads a file, may load multiple steps.
+          ;; Caching is performed by that method.
           (load-datasource-forecasts datasource step))
         (gethash key *forecast-ht*)))))
 
@@ -28,6 +30,8 @@
         (resolution datasource)))
 
 (defmethod load-datasource-forecasts ((datasource datasource) step)
+  ;; Determine file containing the requested step.
+  ;; Load & cache all steps from the file.
   (let* ((file-step (file-step datasource step))
          (filename (namestring (local-pathname datasource file-step)))
          (u-and-v-var (uv-variables datasource)))
@@ -55,11 +59,36 @@
          (filename (namestring (local-pathname datasource file-step)))
          (u-and-v-var (uv-variables datasource)))
     (log2:info "Loading forecast ~a~%" filename)
-    (let ((uvdata (get-messages-from-file filename)))
+    (let ((uvdata (get-uv-messages-from-file filename)))
       (dolist (uv uvdata)
         (let ((step (uv-step uv)))
           (log2:trace "loading ~a step ~a" datasource step)
           (setf (gethash (get-key datasource step) *forecast-ht*) uv))))))
+
+(defmethod load-datasource-forecasts ((datasource gfswave-combined) step)
+  (let* ((file-step (file-step datasource step))
+         (filename (namestring (local-pathname datasource file-step))))
+    (log2:info "Loading forecast ~a~%" filename)
+    (with-grib-index (index '("step" "discipline" "parameterCategory" "parameterNumber"))
+      (let ((retcode (codes-index-add-file index filename)))
+        (case retcode
+          (0)
+          (-11
+           (let ((cycle (cycle datasource))
+                 (resolution (resolution datasource)))
+             (log2:warning "codes-index-add-file: ~a ~a" filename retcode)
+             (error 'missing-forecast :cycle cycle :offset step :resolution resolution :filename filename)))
+          (t
+           (let ((message (codes-get-error-message retcode)))
+             (log2:warning "codes-index-add-file: ~a: ~a" filename retcode)
+             (error "eccodes: ~a: ~a" filename message))))
+        (let* ((query (list (list "discipline" 10)
+                            (list "parameterCategory" 0)
+                            (list "parameterNumber" 3)))
+               (messages (get-messages-from-index index query)))
+          (dolist (message messages)
+            (let ((step (gribmessage-step message)))
+              (setf (gethash (get-key datasource step) *forecast-ht*) message))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Cleanup forecast HT to avoid memory exhaustion

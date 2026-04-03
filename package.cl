@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2025-11-12 20:34:27>
+;;; Last Modified <michael 2026-04-03 23:43:10>
 
 (defpackage "CL-WEATHER"
   (:use "COMMON-LISP"
@@ -43,14 +43,15 @@
            "CYCLE-RUN"
 
            "GET-PARAMS"
-           "PARAMS-FW-FC0"
-           "PARAMS-FW-FC1"
-           "PARAMS-FW-FRACTION"
+           "PARAMS-FC0"
+           "PARAMS-FC1"
+           "PARAMS-FRACTION"
 
            "TIMESPEC-TO-TIMESTAMP"
            "TIMESTAMP-TO-TIMESPEC"
 
-           "INTERPOLATE-FW"
+           "INTERPOLATE-SIMPLE"
+           "INTERPOLATE-UV"
 
            "TILE-FILENAME"
            "CREATE-TILES"

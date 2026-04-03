@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   GRIB data sources
 ;;; Author        Michael Kappert 2019
-;;; Last Modified <michael 2026-02-14 21:06:12>
+;;; Last Modified <michael 2026-03-31 21:51:33>
 
 (in-package "CL-WEATHER")
 
@@ -85,7 +85,7 @@ asynchronously."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Datasource-specific methods
 
-(defmethod download-step-1 ((datasource datasource) step local-path)
+(defmethod download-step-1 ((datasource range-download) step local-path)
   (let* ((ranges (get-grib-file-ranges datasource step)))
     ;; AWS only supports a single byte range and returns the full file if multiple ranges are requested.
     ;; We download ranges individually and concatenate the GRIBs into the final file LOCAL-PATH. 
@@ -105,11 +105,7 @@ asynchronously."
       (uiop:run-program cmd)
       (uiop:run-program delcmd))))
 
-(defmethod download-step-1 ((datasource noaa-rtofs-current) step local-path)
-  ;; RTOFS current gribs don't support ranges (?)
-  (download-file datasource step local-path))
-
-(defmethod download-step-1 ((datasource fw-current) step local-path)
+(defmethod download-step-1 ((datasource file-download) step local-path)
   ;; RTOFS current gribs don't support ranges (?)
   (download-file datasource step local-path))
 

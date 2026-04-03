@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2026-03-16 22:13:09>
+;;; Last Modified <michael 2026-04-03 23:17:22>
 
 (in-package :cl-weather)
 
@@ -122,6 +122,23 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Forecast data
 
+(defstruct gribmessage parameter basetime step info data)
+(defmethod print-object ((msg gribmessage) stream)
+  (format stream "{param=~a time=~a offset=~a ~a}"
+          (gribmessage-parameter msg)
+          (gribmessage-basetime msg)
+          (gribmessage-step msg)
+          (gribmessage-info msg)))
+
+(defstruct parameter name short discipline category number)
+(defmethod print-object ((param parameter) stream)
+  (format stream "{name=~a short=~a d=~a c=~a n=~a}"
+          (parameter-name param)
+          (parameter-short param)
+          (parameter-discipline param)
+          (parameter-category param)
+          (parameter-number param)))
+
 (defstruct uv
   info                                  ; units?, borders, incremements, scan directions
   vars                                  ; wind or current
@@ -135,6 +152,9 @@
 
 (defun uv-forecast-time (uv)
   (adjust-timestamp (uv-basetime uv) (offset :minute (uv-offset uv))))
+
+(defun gribmessage-forecast-time (msg)
+  (adjust-timestamp (gribmessage-basetime msg) (offset :hour (gribmessage-step msg))))
 
 (defmethod print-object ((thing uv) stream)
   (format stream "{UV T=~a C=~a n=~a}"
@@ -173,7 +193,7 @@
         (t
          lng)))
 
-(declaim (inline uv-index))
+(declaim (notinline uv-index))
 (defun uv-index (info lat lon)
   (let ((lat-start (gribinfo-lat-start info))
         (lat-end (gribinfo-lat-end info))
@@ -197,10 +217,24 @@
   (aref (dataset-forecasts dataset) 0))
 
 (declaim (inline forecast-fraction))
-(defun forecast-fraction (fc0 fc1 timestamp)
+
+
+(defgeneric forecast-fraction (fc0 fc1 timestamp)
+  (:documentation
+   "Determine fractions (l, 1-l) to combine forecasts for forecast times t0 and t1 at timestamp"))
+
+(defmethod forecast-fraction ((fc0 uv) (fc1 uv) timestamp)
   (let ((fraction
           (duration-fraction (uv-forecast-time fc0)
                              (uv-forecast-time fc1)
+                             timestamp)))
+    (log2:trace "fc0:~a fc1:~a Fraction: ~a" fc0 fc1 fraction)
+    fraction))
+
+(defmethod forecast-fraction ((fc0 gribmessage) (fc1 gribmessage) timestamp)
+  (let ((fraction
+          (duration-fraction (gribmessage-forecast-time fc0)
+                             (gribmessage-forecast-time fc1)
                              timestamp)))
     (log2:trace "fc0:~a fc1:~a Fraction: ~a" fc0 fc1 fraction)
     fraction))

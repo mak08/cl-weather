@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2019
-;;; Last Modified <michael 2026-03-19 22:05:26>
+;;; Last Modified <michael 2026-04-03 21:46:49>
 
 (in-package "CL-WEATHER")
 
@@ -9,7 +9,7 @@
 ;;; Periodic updates
 
 (defvar *cleanup-timer*)
-(defvar *datasources* '(noaa-gfs-wind ecmwf-ifs-wind ecmwf-aifs-wind fw-current-agulhas))
+(defparameter *datasources* '(noaa-gfs-wind gfswave-combined fw-current-agulhas))
 
 (defun start-cycle-updates ()
   ;; Download the latest complete cycle
