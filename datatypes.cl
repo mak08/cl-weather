@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2018
-;;; Last Modified <michael 2026-04-03 23:17:22>
+;;; Last Modified <michael 2026-04-04 00:51:21>
 
 (in-package :cl-weather)
 
@@ -193,7 +193,7 @@
         (t
          lng)))
 
-(declaim (notinline uv-index))
+(declaim (inline uv-index))
 (defun uv-index (info lat lon)
   (let ((lat-start (gribinfo-lat-start info))
         (lat-end (gribinfo-lat-end info))
@@ -257,7 +257,6 @@
         (v (aref (uv-v-array uv) index)))
     ;;(log2:trace "~a => ~,2,,'0,f,~,2,,'0,f" index (angle u v) (enorm u v))
     (values u v)))
-(declaim (notinline grib-get-uv))
 
 (defmethod print-object ((ts local-time:timestamp) stream)
   (format-datetime stream ts))
