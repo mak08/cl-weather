@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description
 ;;; Author         Michael Kappert 2015
-;;; Last Modified <michael 2026-04-03 16:03:16>
+;;; Last Modified <michael 2026-04-04 18:52:54>
 
 (declaim (optimize (speed 3) (debug 1) (space 1) (safety 1)))
 
@@ -32,11 +32,14 @@
         (lat-end (gribinfo-lat-end info))
         (lon-start (gribinfo-lon-start info))
         (lon-end (gribinfo-lon-end info))
-        (j-scan-pos-p (eql (gribinfo-j-scan-pos info) 1)))
+        (j-scan-pos-p (eql (gribinfo-j-scan-pos info) 1))
+        (lon (mod lon 360)))
     (and (if j-scan-pos-p
              (<= lat-start lat lat-end)
              (<= lat-end lat lat-start))
-         (<= lon-start (mod lon 360) lon-end))))
+         (or (<= lon-start lon lon-end)
+             (and (<= lon-end lon-start)
+                  (not (<= lon-end lon lon-start)))))))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
