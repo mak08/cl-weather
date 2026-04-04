@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   GRIB data sources
 ;;; Author        Michael Kappert 2019
-;;; Last Modified <michael 2026-04-02 22:00:42>
+;;; Last Modified <michael 2026-04-04 15:48:37>
 
 (in-package "CL-WEATHER")
 
@@ -60,7 +60,7 @@
    (uv-variables :initform '("ubaro" "vbaro"))))
 
 (defclass datakind-wave (datakind)
-  ((datakind :initform "current")
+  ((datakind :initform "wave")
    (variables :initform '("swh" "dirpw"))))
 
 (defclass datasource ()
@@ -107,27 +107,27 @@
    (location :initform "https://data.ecmwf.int/forecasts/")
    (schedule :initform (datasource-schedule 'ecmwf-aifs-wind))))
 
-(defgeneric datasource-schedule (class)
+(defgeneric datasource-schedule (datasource-id)
   (:documentation
    "Availability of runs and steps of a datasource.
 The cycle-run must be a valid run for the datasource when making a datasource instance."))
 
-(defgeneric latest-complete-cycle (datasource &optional time)
+(defgeneric latest-complete-cycle (datasource-id &optional time)
   (:documentation
    "Determine the latest cycle that should'be complete (theoretically) at the given time"))
 
-(defgeneric timestamp-cycle (datasource timestamp)
+(defgeneric timestamp-cycle (datasource-id timestamp)
   (:documentation
    "EQL methods on datasource name to determine which cycle to use at timestamp.
 "))
 
-(defgeneric current-cycle (datasource)
+(defgeneric current-cycle (datasource-id)
   (:documentation
    "Cycle currently used by the router."))
 
-(defgeneric previous-cycle (datasource cycle))
+(defgeneric previous-cycle (datasource-id cycle))
 
-(defgeneric cycle-updating-p (datasource &optional time))
+(defgeneric cycle-updating-p (datasource-id &optional time))
 
 (defgeneric cycle-forecast (datasource timestamp)
   (:documentation
