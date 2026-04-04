@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   GRIB data sources
 ;;; Author        Michael Kappert 2019
-;;; Last Modified <michael 2026-04-04 16:48:55>
+;;; Last Modified <michael 2026-04-04 18:20:17>
 
 (in-package "CL-WEATHER")
 
@@ -58,7 +58,7 @@
 (defmethod timestamp-cycle ((datasource (eql 'fw-current-east-australia)) timestamp)
   (timestamp-cycle-fw datasource timestamp))
 (defmethod timestamp-cycle ((datasource (eql 'fw-current-english-channel)) timestamp)
-  (timestamp-cycle-fw datasourceo timestamp))
+  (timestamp-cycle-fw datasource timestamp))
 
 (defmethod cycle-forecast ((datasource fw-current) timestamp)
   ;; Return the 3-hour-forecast required for $timestamp when using $cycle
