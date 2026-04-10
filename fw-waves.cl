@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   GRIB data sources
 ;;; Author        Michael Kappert 2019
-;;; Last Modified <michael 2026-03-31 21:55:35>
+;;; Last Modified <michael 2026-04-10 20:56:02>
 
 (in-package "CL-WEATHER")
 
@@ -31,10 +31,11 @@
   "Cycle currently used by the router."
   ;; The next cycle becomes available (gradually) starting about 3:30h
   ;; after the forecast computation starts.
-  (let ((24h (* 24 60 60)))
-    (make-cycle :timestamp (universal-to-timestamp
-                            (* 24h (floor (timestamp-to-universal
-                                           (adjust-timestamp (now) (offset :hour -12))) 24h))))))
+  (timestamp-cycle datasource (now)))
+
+(defmethod previous-cycle ((datasource (eql 'gfswave-combined)) cycle)
+  (let ((timestamp (cycle-timestamp cycle)))
+    (make-cycle :timestamp (adjust-timestamp timestamp (offset :hour -24)))))
 
 (defmethod latest-complete-cycle ((datasource (eql 'gfswave-combined)) &optional (time (now)))
   ;; Determine the latest cycle that should'be complete (theoretically) at the given time
@@ -43,10 +44,13 @@
                                 (adjust-timestamp time (offset :minute (- 300)))
                               (set :hour 0) (set :minute 0) (set :sec 0)))))
 
+(defconstant 24h (* 24 60 60))
 
 (defmethod timestamp-cycle ((datasource (eql 'gfswave-combined)) timestamp)
-  (let* ((current-cycle (current-cycle datasource)))
-    current-cycle))
+  (let ((ts (timestamp-minimum (now) timestamp)))
+    (make-cycle :timestamp (universal-to-timestamp
+                            (* 24h (floor (timestamp-to-universal
+                                           (adjust-timestamp ts (offset :hour -4))) 24h))))))
 
 (defmethod cycle-forecast ((datasource gfswave-combined) timestamp)
   ;; Return the 3-hour-forecast required for $timestamp when using $cycle

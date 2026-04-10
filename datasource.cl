@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   GRIB data sources
 ;;; Author        Michael Kappert 2019
-;;; Last Modified <michael 2026-04-04 15:48:37>
+;;; Last Modified <michael 2026-04-08 17:39:26>
 
 (in-package "CL-WEATHER")
 
@@ -240,7 +240,7 @@ The cycle-run must be a valid run for the datasource when making a datasource in
 ;;; Default methods
 
 (defmethod previous-cycle ((datasource t) cycle)
-  (move-cycle :hours -6))
+  (move-cycle cycle :hours -6))
 
 (defun move-cycle (cycle &key hours)
   (let ((timestamp (cycle-timestamp cycle)))
