@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   GRIB data sources
 ;;; Author        Michael Kappert 2019
-;;; Last Modified <michael 2026-04-04 18:20:17>
+;;; Last Modified <michael 2026-05-17 18:32:48>
 
 (in-package "CL-WEATHER")
 
@@ -18,13 +18,13 @@
    (location :initform "https://kxdpgsxzhepthjpeghta.supabase.co/storage/v1/object/public/gribs/currents/")
    (maxstep :initform 48)))
 (defclass fw-current-agulhas (fw-current)
-  ((name :initform "fw-current-agulhas")
+  ((name :initform "global_agulhas")
    (schedule :initform (datasource-schedule 'fw-current))))
 (defclass fw-current-east-australia (fw-current)
-  ((name :initform "fw-current-east-australia")
+  ((name :initform "global_east_australia")
    (schedule :initform (datasource-schedule 'fw-current))))
 (defclass fw-current-english-channel (fw-current)
-  ((name :initform "fw-current-english-channel")
+  ((name :initform "ibi_english_channel")
    (schedule :initform (datasource-schedule 'fw-current))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -99,24 +99,13 @@
 (defmethod probe-uris ((datasource fw-current) step)
   (check-uri-exists (data-uri datasource step)))
 
-(defmethod data-uri ((datasource fw-current-agulhas) step)
-  (let* ((cycle (cycle datasource))
+(defmethod data-uri ((datasource fw-current) step)
+  (let* ((name (name datasource))
+         (cycle (cycle datasource))
          (run (format nil "~2,,,'0@a" (cycle-run cycle)))
          (date (cycle-datestring cycle)))
-    (format nil "~a~a/global_agulhas_~a.grb2"
-            (location datasource) date date)))
-(defmethod data-uri ((datasource fw-current-east-australia) step)
-  (let* ((cycle (cycle datasource))
-         (run (format nil "~2,,,'0@a" (cycle-run cycle)))
-         (date (cycle-datestring cycle)))
-    (format nil "~a~a/global_east_australia_~a.grb2"
-            (location datasource) date date)))
-(defmethod data-uri ((datasource fw-current-english-channel) step)
-  (let* ((cycle (cycle datasource))
-         (run (format nil "~2,,,'0@a" (cycle-run cycle)))
-         (date (cycle-datestring cycle)))
-    (format nil "~a~a/ibi_english_channel_~a.grb2"
-            (location datasource) date date)))
+    (format nil "~a~a/~a_~a.grb2"
+            (location datasource) date name date)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Aux methods
@@ -124,11 +113,9 @@
 (defun current-cycle-fw ()
   ;; The next cycle becomes available (gradually) starting about 3:30h
   ;; after the forecast computation starts.
-  (let ((24h (* 24 60 60)))
-    (make-cycle :timestamp (universal-to-timestamp
-                            (* 24h (floor (timestamp-to-universal
-                                           (adjust-timestamp (now) (offset :hour -12))) 24h))))))
-
+  (make-cycle :timestamp (universal-to-timestamp
+                          (* 24h (floor (timestamp-to-universal
+                                         (adjust-timestamp (now) (offset :hour -12))) 24h)))))
 
 (defun latest-complete-cycle-fw (time)
   ;; Determine the latest cycle that should'be complete (theoretically) at the given time
