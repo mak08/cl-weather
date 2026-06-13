@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   GRIB data sources
 ;;; Author        Michael Kappert 2019
-;;; Last Modified <michael 2026-04-08 17:39:26>
+;;; Last Modified <michael 2026-06-05 11:53:24>
 
 (in-package "CL-WEATHER")
 
@@ -31,15 +31,18 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Types of datasources. Not all are already supported.
 
+(defparameter +datasource-ht-lock+
+  (bordeaux-threads:make-lock "datasource-ht"))
 
 (defparameter *datasource-ht* (make-hash-table :test 'equal))
 
 (defun get-datasource (id cycle)
-  (or (gethash (list id (cycle-run cycle) (cycle-datestring cycle))
-               *datasource-ht*)
-      (setf (gethash (list id (cycle-run cycle) (cycle-datestring cycle))
-                     *datasource-ht*)
-            (make-instance id :cycle cycle))))
+  (bordeaux-threads:with-lock-held (+forecast-ht-lock+)
+    (or (gethash (list id (cycle-run cycle) (cycle-datestring cycle))
+                 *datasource-ht*)
+        (setf (gethash (list id (cycle-run cycle) (cycle-datestring cycle))
+                       *datasource-ht*)
+              (make-instance id :cycle cycle)))))
 
 (defclass file-download ()
   ())
@@ -109,23 +112,24 @@
 
 (defgeneric datasource-schedule (datasource-id)
   (:documentation
-   "Availability of runs and steps of a datasource.
+   "EQL methods on datasource name to determine availability of runs and steps of a datasource.
 The cycle-run must be a valid run for the datasource when making a datasource instance."))
 
 (defgeneric latest-complete-cycle (datasource-id &optional time)
   (:documentation
-   "Determine the latest cycle that should'be complete (theoretically) at the given time"))
+   "EQL methods on datasource name to determine the latest cycle that should'be complete (theoretically) at the given time"))
 
 (defgeneric timestamp-cycle (datasource-id timestamp)
   (:documentation
-   "EQL methods on datasource name to determine which cycle to use at timestamp.
-"))
+   "EQL methods on datasource name to determine which cycle to use at timestamp."))
 
 (defgeneric current-cycle (datasource-id)
   (:documentation
-   "Cycle currently used by the router."))
+   "EQL methods on datasource name to determine cycle currently used by the router."))
 
-(defgeneric previous-cycle (datasource-id cycle))
+(defgeneric previous-cycle (datasource-id cycle)
+  (:documentation
+   "EQL methods on datasource name to determine previous cycle. Cycles vary between 6, 12 and 24 hours."))
 
 (defgeneric cycle-updating-p (datasource-id &optional time))
 
@@ -180,7 +184,6 @@ The cycle-run must be a valid run for the datasource when making a datasource in
 (defgeneric file-step (datasource step)
   (:documentation
    "Translate step/offset (hours) to GRIB file step containing the step"))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Datatypes
