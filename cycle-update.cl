@@ -11,6 +11,7 @@
 (defvar *cleanup-timer*)
 (defparameter *datasources* '(noaa-gfs-wind
                               gfswave-combined
+                              arome-wind
                               fw-current-agulhas
                               fw-current-east-australia
                               fw-current-english-channel))

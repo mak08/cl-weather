@@ -1,7 +1,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Description   GRIB data sources
 ;;; Author        Michael Kappert 2019
-;;; Last Modified <michael 2026-06-05 11:53:24>
+;;; Last Modified <michael 2026-06-13 18:01:25>
 
 (in-package "CL-WEATHER")
 
@@ -109,6 +109,13 @@
   ((name :initform "aifs-single")
    (location :initform "https://data.ecmwf.int/forecasts/")
    (schedule :initform (datasource-schedule 'ecmwf-aifs-wind))))
+
+(defclass arome-wind (datasource file-download datakind-wind)
+  ((name :initform "arome")
+   (location :initform "https://dk7714bfk71nn.cloudfront.net/arome/")
+   (region :reader region :initarg :region :initform "western_med")
+   (schedule :initform (datasource-schedule 'arome-wind))
+   (maxstep :initform 48)))
 
 (defgeneric datasource-schedule (datasource-id)
   (:documentation
@@ -456,6 +463,133 @@ The cycle-run must be a valid run for the datasource when making a datasource in
          (step (format nil "~3,,,'0@a" step)))
     (format nil "~artofs.~a/rtofs_glo.t~az.f~a_west_atl_std.grb2"
             (location datasource) date run step)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Météo-France Arome
+
+(defmethod datasource-schedule ((datasource (eql 'arome-wind)))
+  (make-schedule :runs '(0 6 12 18)
+                 :steps (loop :for s :from 0 :to 48 :by 3 :collect s)
+                 :dissem-start 150
+                 :dissem-end 350))
+
+(defmethod current-cycle ((datasource (eql 'arome-wind)))
+  "Cycle currently used by the router."
+  ;; Arome forecasts become available approximately 2.5h after model run
+  (make-cycle :timestamp (adjust-timestamp (now) (offset :minute (- 150)))))
+
+(defmethod previous-cycle ((datasource (eql 'arome-wind)) cycle)
+  (let ((timestamp (cycle-timestamp cycle)))
+    (make-cycle :timestamp (adjust-timestamp timestamp (offset :hour -6)))))
+
+(defmethod cycle-updating-p ((datasource (eql 'arome-wind)) &optional (time (now)))
+  (< 150 (mod (day-minute time) 360) 300))
+
+(defmethod latest-complete-cycle ((datasource (eql 'arome-wind)) &optional (time (now)))
+  ;; Determine the latest cycle that should be complete (theoretically) at the given time
+  (make-cycle :timestamp (adjust-timestamp time (offset :minute (- 300)))))
+
+(defmethod timestamp-cycle ((datasource (eql 'arome-wind)) timestamp)
+  (let* ((current-cycle (current-cycle datasource))
+         (cycle-time (cycle-timestamp current-cycle))
+         (elapsed-minutes (truncate (timestamp-difference timestamp cycle-time) 60))
+         (cycle-step (truncate elapsed-minutes 180))
+         (now (now))
+         (running-minutes (truncate (timestamp-difference now cycle-time) 60))
+         (avail-time (+ 160 (/ cycle-step 1.5))))
+    (if (and (<= 360 elapsed-minutes)
+             (>= running-minutes avail-time))
+        current-cycle
+        (previous-cycle datasource current-cycle))))
+
+(defmethod datasource-schedule ((datasource arome-wind))
+  (make-schedule :runs '(0 6 12 18)
+                 :steps (loop :for s :from 0 :to 48 :by 3 :collect s)
+                 :dissem-start 150
+                 :dissem-end 350))
+
+(defmethod current-cycle ((datasource arome-wind))
+  "Cycle currently used by the router."
+  ;; Arome forecasts become available approximately 2.5h after model run
+  (make-cycle :timestamp (adjust-timestamp (now) (offset :minute (- 150)))))
+
+(defmethod previous-cycle ((datasource arome-wind) cycle)
+  (let ((timestamp (cycle-timestamp cycle)))
+    (make-cycle :timestamp (adjust-timestamp timestamp (offset :hour -6)))))
+
+(defmethod cycle-updating-p ((datasource arome-wind) &optional (time (now)))
+  (< 150 (mod (day-minute time) 360) 300))
+
+(defmethod latest-complete-cycle ((datasource arome-wind) &optional (time (now)))
+  ;; Determine the latest cycle that should be complete (theoretically) at the given time
+  (make-cycle :timestamp (adjust-timestamp time (offset :minute (- 300)))))
+
+(defmethod timestamp-cycle ((datasource arome-wind) timestamp)
+  (let* ((current-cycle (current-cycle datasource))
+         (cycle-time (cycle-timestamp current-cycle))
+         (elapsed-minutes (truncate (timestamp-difference timestamp cycle-time) 60))
+         (cycle-step (truncate elapsed-minutes 180))
+         (now (now))
+         (running-minutes (truncate (timestamp-difference now cycle-time) 60))
+         (avail-time (+ 160 (/ cycle-step 1.5))))
+    (if (and (<= 360 elapsed-minutes)
+             (>= running-minutes avail-time))
+        current-cycle
+        (previous-cycle datasource current-cycle))))
+
+(defmethod cycle-forecast ((datasource arome-wind) timestamp)
+  ;; Return the 3-hour-forecast required for $timestamp when using $cycle
+  (let* ((cycle (cycle datasource))
+         (basetime (cycle-timestamp cycle)) 
+         (difference (truncate
+                      (timestamp-difference timestamp basetime)
+                      3600)))
+    (cond
+      ((minusp difference)
+       (error "~a is in the past of cycle ~a" timestamp cycle))
+      ((<= difference 48)
+       (* 3 (truncate difference 3)))
+      (t
+       (log2:warning "~a is in the future of cycle ~a" timestamp cycle)
+       48))))
+
+(defmethod next-forecast ((datasource arome-wind) forecast)
+  ;; Return the next 3-hour-forecast
+  (min (+ forecast 3) 48))
+
+(defmethod file-step ((datasource arome-wind) step)
+  ;; Arome files contain all forecast steps in a single file
+  step)
+
+(defmethod get-grib-file-ranges ((datasource arome-wind) step)
+  (error "No ranges available for Arome"))
+
+(defmethod local-pathname ((datasource arome-wind) step &key (relative nil))
+  (let* ((cycle (cycle datasource))
+         (date (cycle-datestring cycle))
+         (run (format nil "~2,,,'0@a" (cycle-run cycle)))
+         (region (region datasource))
+         (file-name (format nil "arome.t~a~a.~a.f006-f048" run "z" region))
+         (file-dir (list :relative "arome" region date run))
+         (pathname (make-pathname :directory file-dir
+                                  :name file-name
+                                  :type "grib2")))
+    (if relative pathname
+        (merge-pathnames pathname
+                         (pathname *grib-directory*)))))
+
+(defmethod index-uri ((datasource arome-wind) step)
+  nil)
+
+(defmethod probe-uris ((datasource arome-wind) step)
+  (check-uri-exists (data-uri datasource step)))
+
+(defmethod data-uri ((datasource arome-wind) step)
+  (let* ((cycle (cycle datasource))
+         (run (format nil "~2,,,'0@a" (cycle-run cycle)))
+         (date (cycle-datestring cycle)))
+        (format nil "~a~a/~a/~a/arome.t~a~a.~a.f006-f048.grib2"
+          (location datasource) (region datasource) date run run "z" (region datasource))))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
