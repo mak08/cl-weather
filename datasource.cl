@@ -70,13 +70,18 @@
   ((name :allocation :class :reader name :initform "gribs"
          :documentation "NAME is used to construct local file path. It should be unique.")
    (location :allocation :class :reader location)
-   (schedule :allocation :class :reader schedule)
+    (schedule :reader schedule)
    (resolution :reader resolution :initarg :resolution :initform "0p25")
    (cycle :reader cycle :initarg :cycle :initform (make-cycle)
           :documentation "The data cycle (an instance of CYCLE)")
    (maxstep :reader maxstep :initform 0)))
 
+(defgeneric datasource-schedule-for-cycle (datasource-id cycle))
+
 (defmethod initialize-instance :after ((instance datasource) &rest initargs &key (cycle))
+  (declare (ignore initargs))
+  (setf (slot-value instance 'schedule)
+        (datasource-schedule-for-cycle (class-name (class-of instance)) cycle))
   (assert (member (cycle-run cycle) (schedule-runs (schedule instance)))))
 
 (defclass noaa-datasource (datasource range-download)
@@ -100,7 +105,8 @@
 (defclass ecmwf-ifs-wind (ecmwf-datasource datakind-wind)
   ((name :initform "ifs")
    (location :initform "https://data.ecmwf.int/forecasts/")
-   (schedule :initform (datasource-schedule 'ecmwf-ifs-wind))))
+    (schedule :initform (datasource-schedule 'ecmwf-ifs-wind))
+    (maxstep :initform 360)))
 
 (defclass ecmwf-ifs-wind-aws (ecmwf-ifs-wind)
   ((location :initform "https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com/")))
@@ -121,6 +127,10 @@
   (:documentation
    "EQL methods on datasource name to determine availability of runs and steps of a datasource.
 The cycle-run must be a valid run for the datasource when making a datasource instance."))
+
+(defmethod datasource-schedule-for-cycle ((datasource-id t) cycle)
+  (declare (ignore cycle))
+  (datasource-schedule datasource-id))
 
 (defgeneric latest-complete-cycle (datasource-id &optional time)
   (:documentation
@@ -263,12 +273,22 @@ The cycle-run must be a valid run for the datasource when making a datasource in
 ;;; ECMWF
 
 (defmethod datasource-schedule ((datasource (eql 'ecmwf-ifs-wind)))
-  (make-schedule :runs '(0 12)
+  (make-schedule :runs '(0 6 12 18)
                  :steps (append
-                         (loop :for s :below 144 :by 3 :collect s)
-                         (loop :for s :from 144 :to 360 :by 6 :collect s))
-                 :dissem-start 515
-                 :dissem-end 550))
+         (loop :for s :to 144 :by 3 :collect s)
+                         (loop :for s :from 150 :to 360 :by 6 :collect s))
+                 :dissem-start 345
+                 :dissem-end 454))
+
+(defmethod datasource-schedule-for-cycle ((datasource (eql 'ecmwf-ifs-wind)) cycle)
+  (let* ((schedule (datasource-schedule datasource))
+         (steps (schedule-steps schedule)))
+    (if (member (cycle-run cycle) '(6 18))
+        (make-schedule :runs (schedule-runs schedule)
+                       :steps (remove-if (lambda (step) (> step 144)) steps)
+                       :dissem-start 345
+                       :dissem-end 387)
+        schedule)))
 
 (defmethod datasource-schedule ((datasource (eql 'ecmwf-aifs-wind)))
   (make-schedule :runs '(0 6 12 18)
@@ -278,9 +298,8 @@ The cycle-run must be a valid run for the datasource when making a datasource in
 
 (defmethod current-cycle ((datasource (eql 'ecmwf-ifs-wind)))
   "Cycle currently used by the router."
-  ;; The next cycle becomes available (gradually) starting about 3:30h
-  ;; after the forecast computation starts.
-  (make-cycle :interval (* 12 60 60) :delay (* 210 60)))
+  ;; IFS Open Data starts arriving 5h45 after each six-hourly cycle.
+  (make-cycle :timestamp (now) :interval (* 6 60 60) :delay (* 345 60)))
 
 (defmethod current-cycle ((datasource (eql 'ecmwf-aifs-wind)))
   "Cycle currently used by the router."
@@ -290,11 +309,50 @@ The cycle-run must be a valid run for the datasource when making a datasource in
 
 (defmethod latest-complete-cycle ((datasource (eql 'ecmwf-ifs-wind)) &optional (time (now)))
   ;; Determine the latest cycle that should'be complete (theoretically) at the given time
-  (make-cycle :interval (* 12 60 60) :delay (* 300 60)))
+  (make-cycle :timestamp time :interval (* 6 60 60) :delay (* 455 60)))
 
 (defmethod latest-complete-cycle ((datasource (eql 'ecmwf-aifs-wind)) &optional (time (now)))
   ;; Determine the latest cycle that should'be complete (theoretically) at the given time
   (make-cycle :interval (* 6 60 60) :delay (* 300 60)))
+
+(defmethod cycle-updating-p ((datasource (eql 'ecmwf-ifs-wind)) &optional (time (now)))
+  (let* ((cycle (make-cycle :timestamp time :interval (* 6 60 60) :delay (* 345 60)))
+         (run (cycle-run cycle))
+         (elapsed (truncate (timestamp-difference time (cycle-timestamp cycle)) 60))
+         (end (if (member run '(0 12)) 454 387)))
+    (<= 345 elapsed end)))
+
+(defmethod maxstep ((datasource ecmwf-ifs-wind))
+  (car (last (schedule-steps (schedule datasource)))))
+
+(defmethod timestamp-cycle ((datasource (eql 'ecmwf-ifs-wind)) timestamp)
+  (loop
+    :with cycle = (current-cycle datasource)
+    :repeat 64
+    :for datasource-instance = (get-datasource datasource cycle)
+    :for elapsed = (truncate (timestamp-difference timestamp (cycle-timestamp cycle)) 3600)
+    :when (and (not (minusp elapsed))
+               (<= elapsed (maxstep datasource-instance)))
+      :do (return cycle)
+    :do (setf cycle (previous-cycle datasource cycle))
+    :finally (return (current-cycle datasource))))
+
+(defmethod cycle-forecast ((datasource ecmwf-ifs-wind) timestamp)
+  (let* ((cycle-time (cycle-timestamp (cycle datasource)))
+         (elapsed (timestamp-difference timestamp cycle-time))
+         (steps (schedule-steps (schedule datasource)))
+         (hours (floor elapsed 3600)))
+    (when (minusp elapsed)
+      (error "~a is in the past of cycle ~a" timestamp (cycle datasource)))
+    (loop :with selected = (first steps)
+          :for step :in steps
+          :while (<= step hours)
+          :do (setf selected step)
+          :finally (return selected))))
+
+(defmethod next-forecast ((datasource ecmwf-ifs-wind) forecast)
+  (or (find-if (lambda (step) (> step forecast)) (schedule-steps (schedule datasource)))
+      forecast))
 
 (defmethod get-grib-file-ranges ((datasource ecmwf-datasource) step)
   (loop
