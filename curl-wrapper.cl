@@ -5,11 +5,17 @@
 
 (in-package "CL-WEATHER")
 
+(defparameter *download-connect-timeout* 15)
+(defparameter *download-max-time* 300)
+(defparameter *http-connect-timeout* 10)
+(defparameter *http-max-time* 30)
+
 (defun http-get (url &key (headers ()) (method :get))
   (ecase method ((:get :head)))
   (let* ((head-flag (if (eq method :head) "-I" ""))
          (ftp-command
-           (format () "curl --max-time 3 -i ~a ~{ -H ~a~} \"~a\"" head-flag headers url))
+           (format () "curl --connect-timeout ~a --max-time ~a -i ~a ~{ -H ~a~} \"~a\""
+                   *http-connect-timeout* *http-max-time* head-flag headers url))
          (out-stream (make-array '(0) :element-type 'character :fill-pointer 0 :adjustable t))
          (err-stream (make-array '(0) :element-type 'character :fill-pointer 0 :adjustable t)))
     (log2:trace "~a" ftp-command)
@@ -68,7 +74,7 @@
          (p2 (position #\Space s :start (1+ p1)))) 
     (make-http-status :protocol (subseq s 0 p1)
                       :code (parse-integer (subseq s (1+ p1) p2))
-                      :text (string-trim " "
+                      :text (string-trim '(#\Space #\Newline)
                                          (subseq s (1+ p2))))))
 
 (defstruct http-header name value)
@@ -76,7 +82,8 @@
   (log2:trace "~a" s) 
   (let ((p (position #\: s)))
     (make-http-header :name (subseq s 0 p)
-                      :value (string-trim " " (subseq s (1+ p))))))
+                      :value (string-trim '(#\Space #\Newline)
+                                          (subseq s (1+ p))))))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

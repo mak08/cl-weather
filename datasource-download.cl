@@ -56,9 +56,12 @@ asynchronously."
       (log2:info "File exists: ~a" local-path)
       (return-from download-step (values t)))
     (ensure-directories-exist local-path)
-    (dotimes
-        (try retries)
+    (dotimes (try retries)
+      (log2:info "Checking availability of ~a cycle ~a step ~a (attempt ~a/~a)"
+                 (name datasource) (cycle datasource) step (1+ try) retries)
       (when (probe-uris datasource step)
+        (log2:info "Source available; starting download of ~a cycle ~a step ~a"
+                   (name datasource) (cycle datasource) step)
         (handler-case
             (progn
               (download-step-1 datasource step local-path)
@@ -73,12 +76,15 @@ asynchronously."
             (log2:warning "curl error: ~a" e))
           (condition (e)
             (log2:warning "Unexpected condition: ~a" e))))
-      (log2:info "Waiting 30s for ~a ~a ~a" (name datasource) (cycle-run (cycle datasource)) step)
-      (sleep 30))
+      (when (< try (1- retries))
+        (log2:info "Waiting 30s for ~a ~a ~a" (name datasource) (cycle-run (cycle datasource)) step)
+        (sleep 30)))
     (log2:warning "Final failed download ~a ~a ~a" (name datasource) (cycle-run (cycle datasource)) step)
     (return-from download-step nil)))
 
 (defmethod probe-uris (datasource step)
+  (log2:info "Probing GRIB and index availability for ~a cycle ~a step ~a"
+             (name datasource) (cycle datasource) step)
   (and (check-uri-exists (data-uri datasource step))
        (check-uri-exists (index-uri datasource step))))
 
@@ -90,12 +96,18 @@ asynchronously."
     ;; AWS only supports a single byte range and returns the full file if multiple ranges are requested.
     ;; We download ranges individually and concatenate the GRIBs into the final file LOCAL-PATH. 
     (when (null ranges)
-      (log2:warning "No ranges could be determined for ~a" datasource))
+            (error "No requested GRIB byte ranges found for ~a step ~a" datasource step))
+          (log2:info "Downloading ~a byte ranges for ~a cycle ~a step ~a"
+                     (length ranges) (name datasource) (cycle datasource) step)
     (let* ((parts
              (loop
                :for part-no :from 1
                :for range :in ranges
                :for part-file-name = (format nil "~a.~a" local-path part-no)
+                 :do (log2:info "Downloading range ~a/~a bytes ~a-~a for ~a step ~a"
+                                part-no (length ranges)
+                                (range-start range) (range-end range)
+                                (name datasource) step)
                :do (download-range datasource step range part-file-name)
                :collect part-file-name))
            (cmd   
@@ -112,23 +124,30 @@ asynchronously."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Helper functions
 
+(defun run-download-curl (arguments)
+  (let ((command
+          (append (list "curl" "--fail" "--location" "--silent" "--show-error"
+                        "--connect-timeout" (princ-to-string *download-connect-timeout*)
+                        "--max-time" (princ-to-string *download-max-time*))
+                  arguments)))
+    (log2:trace "~{~a~^ ~}" command)
+    (uiop:run-program command)))
+
 (defun download-file (datasource step local-path)
-  (let* ((url
-           (data-uri datasource step))
-         (cmd
-           (format nil "curl ~a -o ~a" url local-path)))
-    (log2:trace "~a" cmd)
-    (uiop:run-program cmd)))
+  (let ((url (data-uri datasource step)))
+    (log2:info "Downloading full GRIB for ~a cycle ~a step ~a from ~a"
+               (name datasource) (cycle datasource) step url)
+    (run-download-curl (list url "-o" local-path))))
   
 (defun download-range (datasource step range part-file-name)
   (let* ((ranges-header
-           (format nil  "\"Range: bytes=~a-~a\"" (range-start range) (range-end range)))
+           (format nil "Range: bytes=~a-~a" (range-start range) (range-end range)))
          (url
-           (data-uri datasource step))
-         (cmd
-           (format nil "curl -H ~a ~a -o ~a" ranges-header url part-file-name)))
-    (log2:trace "~a" cmd)
-    (uiop:run-program cmd)))
+           (data-uri datasource step)))
+    (run-download-curl (list "-H" ranges-header url "-o" part-file-name))
+    (log2:info "Downloaded byte range ~a-~a for ~a step ~a to ~a"
+               (range-start range) (range-end range)
+               (name datasource) step part-file-name)))
 
 (defmethod local-pathname ((datasource datasource) step &key (relative nil))
   (let* ((srcname (name datasource))
@@ -152,6 +171,8 @@ asynchronously."
 (defmethod retrieve-index-file ((datasource datasource) step)
   (let* ((url (index-uri datasource step))
          (retry 3))
+    (log2:info "Retrieving index for ~a cycle ~a step ~a from ~a"
+               (name datasource) (cycle datasource) step url)
     (tagbody
        :retry
        (let* ((response (http-get url))
