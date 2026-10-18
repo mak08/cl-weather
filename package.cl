@@ -52,6 +52,13 @@
 
            "INTERPOLATE-SIMPLE"
            "INTERPOLATE-UV"
+           "UV-CYCLE"
+
+           "NOAA-GFS-WIND"
+           "GFSWAVE-COMBINED"
+           "DATASOURCE-INFO"
+           "*LATEST-FORECAST*"
+           "*FORECAST-HT*"
 
            "TILE-FILENAME"
            "CREATE-TILES"
