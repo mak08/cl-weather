@@ -146,8 +146,8 @@
 (defun read-message-info (message)
   (let ((lon-start (coerce (codes-get-double message "longitudeOfFirstGridPointInDegrees") 'double-float))
         (lon-end (coerce (codes-get-double message "longitudeOfLastGridPointInDegrees") 'double-float))
-        (j-inc (codes-get-double message "jDirectionIncrementInDegrees")) ; "south to north"
-        (i-inc (codes-get-double message "iDirectionIncrementInDegrees")) ; "west to east"
+        (j-inc (coerce (codes-get-double message "jDirectionIncrementInDegrees") 'double-float)) ; "south to north"
+        (i-inc (coerce (codes-get-double message "iDirectionIncrementInDegrees") 'double-float)) ; "west to east"
         )
     (when (= 0d0 (mod (incf lon-end i-inc) 360) lon-start)
       (log2:trace "wrap around grib")

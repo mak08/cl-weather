@@ -105,14 +105,19 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; GRIB Info
 
-(defstruct gribinfo 
-  grid-size                     ; Number of data points, should equal lat-points * lon-points
-  step-units                    ; Unit of step (in hours), usually 1
-  lat-start lat-end lat-points  ; Start, end and number of points along parallel
-  lon-start lon-end lon-points  ; Start, end and number of points along meridian
-  i-inc j-inc                   ; Grid increment in degrees 
-  i-scan-neg j-scan-pos         ; Value order
-  )
+(defstruct gribinfo
+  (grid-size 0 :type fixnum) ; Number of data points, should equal lat-points * lon-points
+  (step-units 0 :type fixnum) ; Unit of step (in hours), usually 1
+  (lat-start 0d0 :type double-float)
+  (lat-end 0d0 :type double-float)
+  (lat-points 0 :type fixnum) ; Start, end and number of points along parallel
+  (lon-start 0d0 :type double-float)
+  (lon-end 0d0 :type double-float)
+  (lon-points 0 :type fixnum) ; Start, end and number of points along meridian
+  (i-inc 0d0 :type double-float)
+  (j-inc 0d0 :type double-float) ; Grid increment in degrees
+  (i-scan-neg 0 :type fixnum)
+  (j-scan-pos 0 :type fixnum)) ; Value order
 (defmethod print-object ((thing gribinfo) stream)
   (format stream "{GribInfo ~apts i-incr:~a j-incr:~a}"
           (gribinfo-grid-size thing)
@@ -122,7 +127,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Forecast data
 
-(defstruct gribmessage parameter basetime step info data)
+(defstruct gribmessage
+  parameter basetime step info
+  (data (make-array 0 :element-type 'double-float)
+        :type (simple-array double-float (*))))
 (defmethod print-object ((msg gribmessage) stream)
   (format stream "{param=~a time=~a offset=~a ~a}"
           (gribmessage-parameter msg)
@@ -146,8 +154,10 @@
   (cycle  nil :read-only t)             ; Time when forecast was created
   offset                                ; Offset of forecast data w.r.t. dataset basetime
   step                                  ; Step - for debugging
-  u-array                               ; U component
-  v-array                               ; V component
+  (u-array (make-array 0 :element-type 'double-float)
+           :type (simple-array double-float (*))) ; U component
+  (v-array (make-array 0 :element-type 'double-float)
+           :type (simple-array double-float (*))) ; V component
   )
 
 (defun uv-forecast-time (uv)
@@ -193,25 +203,39 @@
         (t
          lng)))
 
+(declaim (inline uv-index-double)
+         (ftype (function (gribinfo double-float double-float) fixnum)
+                uv-index-double))
+(defun uv-index-double (info lat lon)
+  (let* ((i-inc (gribinfo-i-inc info))
+         (j-inc (gribinfo-j-inc info))
+         (lat0 (gribinfo-lat-start info))
+         (lon0 (gribinfo-lon-start info))
+         (j-scan-pos-p (eql (gribinfo-j-scan-pos info) 1))
+         (olat (if j-scan-pos-p (- lat lat0) (- lat0 lat)))
+         (olon (- lon lon0))
+         (lat-index (the fixnum (floor olat j-inc)))
+         (lon-index (the fixnum (floor olon i-inc)))
+         (lonpoints (gribinfo-lon-points info)))
+    (declare (double-float i-inc j-inc lat0 lon0 olat olon)
+             (fixnum lat-index lon-index lonpoints))
+    (the fixnum (+ (the fixnum (* lat-index lonpoints)) lon-index))))
+
 (declaim (inline uv-index))
 (defun uv-index (info lat lon)
-  (let ((lat-start (gribinfo-lat-start info))
-        (lat-end (gribinfo-lat-end info))
-        (lon-start (gribinfo-lon-start info))
-        (lon-end (gribinfo-lon-end info))
-        (j-scan-pos-p (eql (gribinfo-j-scan-pos info) 1)))
-    (let* ((i-inc (gribinfo-i-inc info))
-           (j-inc (gribinfo-j-inc info))
-           (lat0 (gribinfo-lat-start info))
-           (lon0 (gribinfo-lon-start info))
-           (olat (if j-scan-pos-p (- lat lat0) (- lat0 lat)))
-           (olon (- lon lon0))
-           (lat-index (floor olat j-inc))
-           (lon-index (floor olon i-inc))
-           (lonpoints (gribinfo-lon-points info))
-           (lat-offset (* lat-index lonpoints))
-           (uv-index (+ lat-offset lon-index)))
-      uv-index)))
+  (declare (type gribinfo info)
+           (real lat lon))
+  (let* ((i-inc (gribinfo-i-inc info))
+         (j-inc (gribinfo-j-inc info))
+         (lat0 (gribinfo-lat-start info))
+         (lon0 (gribinfo-lon-start info))
+         (j-scan-pos-p (eql (gribinfo-j-scan-pos info) 1))
+         (olat (if j-scan-pos-p (- lat lat0) (- lat0 lat)))
+         (olon (- lon lon0))
+         (lat-index (floor olat j-inc))
+         (lon-index (floor olon i-inc)))
+    (+ (* lat-index (gribinfo-lon-points info))
+       lon-index)))
 
 (defun dataset-forecast (dataset)
   (aref (dataset-forecasts dataset) 0))
@@ -250,9 +274,10 @@
        (assert (not (minusp s0)))
        (coerce (/ s0 delta) 'double-float))))) 
 
-(declaim (inline grib-get-uv))
+(declaim (inline grib-get-uv)
+         (ftype (function (uv fixnum) (values double-float double-float))
+                grib-get-uv))
 (defun grib-get-uv (uv index)
-  (declare (ftype (function (t) (array double-float (*))) uv-u-array uv-v-array))
   (let ((u (aref (uv-u-array uv) index))
         (v (aref (uv-v-array uv) index)))
     ;;(log2:trace "~a => ~,2,,'0,f,~,2,,'0,f" index (angle u v) (enorm u v))

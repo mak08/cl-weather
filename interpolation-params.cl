@@ -7,7 +7,10 @@
 
 (in-package "CL-WEATHER")
 
-(defstruct params fc0 fc1 fraction)
+(defstruct params
+  (fc0 nil :type (or null uv gribmessage))
+  (fc1 nil :type (or null uv gribmessage))
+  (fraction 0d0 :type double-float))
 
 (defun get-params (datasource timestamp
                    &key
@@ -28,12 +31,14 @@
 
 (declaim (inline valid-position))
 (defun valid-position (lat lon info)
+  (declare (double-float lat lon)
+           (type gribinfo info))
   (let ((lat-start (gribinfo-lat-start info))
         (lat-end (gribinfo-lat-end info))
         (lon-start (gribinfo-lon-start info))
         (lon-end (gribinfo-lon-end info))
         (j-scan-pos-p (eql (gribinfo-j-scan-pos info) 1))
-        (lon (mod lon 360)))
+        (lon (mod lon 360d0)))
     (and (if j-scan-pos-p
              (<= lat-start lat lat-end)
              (<= lat-end lat lat-start))
