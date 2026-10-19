@@ -11,8 +11,8 @@ The Arome datasource is automatically included in the active datasources list (`
 
 ### Default Parameters
 - **Runs**: 00, 06, 12, 18 UTC (6-hourly cycles)
-- **Forecast Steps**: 0, 3, 6, ..., 48 hours (3-hour intervals)
-- **Dissemination Timing**: 150-350 minutes after model run (2.5-5.8 hours)
+- **Forecast Steps**: 6, 9, 12, ..., 48 hours (3-hour intervals)
+- **Download Checks**: Start 260 minutes after model run; retry for up to 90 minutes (through approximately minute 350)
 - **Max Forecast Period**: 48 hours
 - **Default Region**: `western_med` (western Mediterranean)
 - **Data Source**: CloudFront CDN
@@ -52,7 +52,7 @@ arome-wind
 
 ### Methods Implemented
 - `datasource-schedule`: Returns schedule with 6-hourly runs and 3-hourly steps
-- `current-cycle`: Computes current cycle (6-hourly cycles, 150min dissemination delay)
+- `current-cycle`: Advances cycle selection 150 minutes after each model run; this is separate from file publication
 - `latest-complete-cycle`: Determines latest theoretically complete cycle
 - `timestamp-cycle`: Selects appropriate cycle for a given timestamp
 - `cycle-forecast`: Maps timestamp to forecast step
@@ -110,6 +110,8 @@ Once configured, Arome data will be automatically downloaded and cached by `star
 ## Notes
 
 - Arome files are downloaded as complete files (no byte-range requests)
-- Forecast steps are 3-hourly from 0 to 48 hours
-- Default dissemination timing assumes ~150 minutes for Arome data availability
+- Forecast steps are 3-hourly from 6 to 48 hours
+- Recent CloudFront `Last-Modified` headers show 00/12Z files published about 256 minutes after the run, and 06/18Z files about 316 minutes after the run. Starting at minute 260 with the downloader's 90-minute retry window covers this usual pattern.
+- One checked 06Z file was not published until about 556 minutes after its run, outside that retry window. The configured timing is suitable for usual publication but does not guarantee recovery from unusually late files.
+- The schedule's `dissem-end` value is descriptive: the downloader currently uses its fixed 90-minute retry period rather than enforcing that field.
 - Region parameter provides extensibility for additional regional Arome domains

@@ -137,7 +137,7 @@ asynchronously."
   (let ((url (data-uri datasource step)))
     (log2:info "Downloading full GRIB for ~a cycle ~a step ~a from ~a"
                (name datasource) (cycle datasource) step url)
-    (run-download-curl (list url "-o" local-path))))
+    (run-download-curl (list url "-o" (namestring local-path)))))
   
 (defun download-range (datasource step range part-file-name)
   (let* ((ranges-header

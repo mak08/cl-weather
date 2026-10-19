@@ -527,13 +527,13 @@ The cycle-run must be a valid run for the datasource when making a datasource in
 
 (defmethod datasource-schedule ((datasource (eql 'arome-wind)))
   (make-schedule :runs '(0 6 12 18)
-                 :steps (loop :for s :from 0 :to 48 :by 3 :collect s)
-                 :dissem-start 150
+                 :steps (loop :for s :from 6 :to 48 :by 3 :collect s)
+                 :dissem-start 260
                  :dissem-end 350))
 
 (defmethod current-cycle ((datasource (eql 'arome-wind)))
   "Cycle currently used by the router."
-  ;; Arome forecasts become available approximately 2.5h after model run
+  ;; Move the router's cycle selection forward 2.5h after each model run.
   (make-cycle :timestamp (adjust-timestamp (now) (offset :minute (- 150)))))
 
 (defmethod previous-cycle ((datasource (eql 'arome-wind)) cycle)
@@ -562,13 +562,13 @@ The cycle-run must be a valid run for the datasource when making a datasource in
 
 (defmethod datasource-schedule ((datasource arome-wind))
   (make-schedule :runs '(0 6 12 18)
-                 :steps (loop :for s :from 0 :to 48 :by 3 :collect s)
-                 :dissem-start 150
+                 :steps (loop :for s :from 6 :to 48 :by 3 :collect s)
+                 :dissem-start 260
                  :dissem-end 350))
 
 (defmethod current-cycle ((datasource arome-wind))
   "Cycle currently used by the router."
-  ;; Arome forecasts become available approximately 2.5h after model run
+  ;; Move the router's cycle selection forward 2.5h after each model run.
   (make-cycle :timestamp (adjust-timestamp (now) (offset :minute (- 150)))))
 
 (defmethod previous-cycle ((datasource arome-wind) cycle)
@@ -606,7 +606,7 @@ The cycle-run must be a valid run for the datasource when making a datasource in
       ((minusp difference)
        (error "~a is in the past of cycle ~a" timestamp cycle))
       ((<= difference 48)
-       (* 3 (truncate difference 3)))
+       (max 6 (* 3 (truncate difference 3))))
       (t
        (log2:warning "~a is in the future of cycle ~a" timestamp cycle)
        48))))
