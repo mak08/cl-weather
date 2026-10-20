@@ -115,3 +115,4 @@ Once configured, Arome data will be automatically downloaded and cached by `star
 - One checked 06Z file was not published until about 556 minutes after its run, outside that retry window. The configured timing is suitable for usual publication but does not guarantee recovery from unusually late files.
 - The schedule's `dissem-end` value is descriptive: the downloader currently uses its fixed 90-minute retry period rather than enforcing that field.
 - Region parameter provides extensibility for additional regional Arome domains
+- Wind interpolation uses the GRIB grid origin and scan directions, handles longitude wrap across 0°, and excludes bitmap-missing points.

@@ -76,7 +76,7 @@
                       :info message-info
                       :data values)))
 
-(defun get-uv-steps-from-index (index u-and-v-var)
+(defun get-uv-steps-from-index (index u-and-v-var &optional source)
   (let* ((steps 
            (codes-index-get-long index "step"))
          (shortNames
@@ -98,6 +98,7 @@
                             (select-and-read-message index (list (list "shortName" v-var))))))
             (make-uv :info u-message-info
                      :vars u-and-v-var
+                     :source source
                      :basetime u-data-time
                      :cycle u-data-time
                      :offset (* u-offset 60)
@@ -164,7 +165,10 @@
      :j-inc j-inc
      :i-inc i-inc
      :j-scan-pos (codes-get-long message "jScansPositively")
-     :i-scan-neg  (codes-get-long message "iScansNegatively"))))
+     :i-scan-neg  (codes-get-long message "iScansNegatively")
+     :bitmap-present (codes-get-long message "bitmapPresent")
+     :missing-value (coerce (codes-get-double message "missingValue")
+                            'double-float))))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

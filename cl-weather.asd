@@ -6,6 +6,7 @@
 (defsystem "cl-weather"
   :description "Load and prepare weather data"
   :depends-on ("makros" "log2" "cl-eccodes" "cl-geomath" "local-time" "cl-map")
+  :in-order-to ((test-op (test-op "cl-weather/test")))
   :default-component-class cl-source-file.cl
   :serial t
   :components ((:file "package")
@@ -24,8 +25,19 @@
                (:file "forecast")
                (:file "interpolation-params")
                (:file "interpolation-simple")
+               (:file "interpolation-arome")
                (:file "interpolation-uv")
                (:file "tiles")))
+
+(defsystem "cl-weather/test"
+  :depends-on ("cl-weather" "fiveam")
+  :default-component-class cl-source-file.cl
+  :components ((:file "tests/interpolation-tests"))
+  :perform (test-op (operation system)
+             (declare (ignore operation system))
+             (unless (uiop:symbol-call :fiveam :run!
+                                       (find-symbol "CL-WEATHER-TESTS" "CL-WEATHER"))
+               (error "cl-weather tests failed"))))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

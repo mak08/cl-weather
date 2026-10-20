@@ -49,7 +49,7 @@
            (let ((message (codes-get-error-message retcode)))
              (log2:warning "codes-index-add-file: ~a: ~a" filename retcode)
              (error "eccodes: ~a: ~a" filename message))))
-        (let ((uvdata (get-uv-steps-from-index index u-and-v-var)))
+        (let ((uvdata (get-uv-steps-from-index index u-and-v-var (name datasource))))
           (dolist (uv uvdata)
             (let ((step (uv-step uv)))
               (setf (gethash (get-key datasource step) *forecast-ht*) uv))))))))

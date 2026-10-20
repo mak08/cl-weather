@@ -65,11 +65,13 @@
         (fc-1 (params-fc1 params))
         (fraction (params-fraction params)))
     (declare (type uv fc-0 fc-1))
-    (cond
-      ((valid-position lat lon (uv-info fc-0))
-       (get-values fraction lat lon fc-0 fc-1))
-      (t
-       (values 0d0 0d0 0d0 0d0)))))
+    (if (equal (uv-source fc-0) "arome")
+        (interpolate-arome-uv fraction lat lon fc-0 fc-1)
+        (cond
+          ((valid-position lat lon (uv-info fc-0))
+           (get-values fraction lat lon fc-0 fc-1))
+          (t
+           (values 0d0 0d0 0d0 0d0))))))
 
 (defun get-wind (datasource timestamp lat lon)
   (declare (double-float lat lon))

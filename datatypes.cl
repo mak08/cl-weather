@@ -117,7 +117,9 @@
   (i-inc 0d0 :type double-float)
   (j-inc 0d0 :type double-float) ; Grid increment in degrees
   (i-scan-neg 0 :type fixnum)
-  (j-scan-pos 0 :type fixnum)) ; Value order
+  (j-scan-pos 0 :type fixnum) ; Value order
+  (bitmap-present 0 :type fixnum)
+  (missing-value 9999d0 :type double-float))
 (defmethod print-object ((thing gribinfo) stream)
   (format stream "{GribInfo ~apts i-incr:~a j-incr:~a}"
           (gribinfo-grid-size thing)
@@ -150,6 +152,7 @@
 (defstruct uv
   info                                  ; units?, borders, incremements, scan directions
   vars                                  ; wind or current
+  source
   basetime                              ; cycle time
   (cycle  nil :read-only t)             ; Time when forecast was created
   offset                                ; Offset of forecast data w.r.t. dataset basetime
