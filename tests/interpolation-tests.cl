@@ -119,6 +119,108 @@
                                  (expected-arome-path "20260924" "18")))
                         requests)))))
 
+(fiveam:test ifs-datasource-info-uses-cycle-specific-schedule
+  (let* ((short-cycle (test-cycle "2026-09-24T06:00:00Z"))
+         (long-cycle (test-cycle "2026-09-24T12:00:00Z"))
+         (long-datasource (get-datasource 'ecmwf-ifs-wind long-cycle))
+         (short-info (datasource-info-for-cycle 'ecmwf-ifs-wind short-cycle))
+         (long-info (datasource-info-for-cycle 'ecmwf-ifs-wind long-cycle))
+         (short-paths (datasource-info-gribpaths short-info))
+         (long-paths (datasource-info-gribpaths long-info)))
+    (fiveam:is (= 49 (length short-paths)))
+    (fiveam:is (every (lambda (path) (<= (grib-spec-step path) 144))
+                      short-paths))
+    (fiveam:is (equal "ifs/0p25/20260924/06/ifs.0p25.20260924.t06z.f000.grib2"
+                      (namestring (grib-spec-path (first short-paths)))))
+    (fiveam:is (= 85 (length long-paths)))
+    (fiveam:is (= 360 (grib-spec-step (car (last long-paths)))))
+    (fiveam:is (equal "ifs/0p25/20260924/12/ifs.0p25.20260924.t12z.f360.grib2"
+                      (namestring (grib-spec-path (car (last long-paths))))))
+    (fiveam:is (equal "https://data.ecmwf.int/forecasts/20260924/12z/ifs/0p25/oper/20260924120000-0h-oper-fc.grib2"
+                      (data-uri long-datasource 0)))
+    (fiveam:is (equal "https://data.ecmwf.int/forecasts/20260924/12z/ifs/0p25/oper/20260924120000-0h-oper-fc.index"
+                      (index-uri long-datasource 0)))))
+
+(fiveam:test ifs-schedules-match-dissemination-windows
+  (let* ((long-schedule (datasource-schedule-for-cycle
+                         'ecmwf-ifs-wind
+                         (test-cycle "2026-09-24T12:00:00Z")))
+         (short-schedule (datasource-schedule-for-cycle
+                          'ecmwf-ifs-wind
+                          (test-cycle "2026-09-24T18:00:00Z"))))
+    (fiveam:is (= 345 (schedule-dissem-start long-schedule)))
+    (fiveam:is (= 454 (schedule-dissem-end long-schedule)))
+    (fiveam:is (= 360 (car (last (schedule-steps long-schedule)))))
+    (fiveam:is (= 345 (schedule-dissem-start short-schedule)))
+    (fiveam:is (= 387 (schedule-dissem-end short-schedule)))
+    (fiveam:is (= 144 (car (last (schedule-steps short-schedule)))))
+    (fiveam:is (member 'ecmwf-ifs-wind *datasources*))))
+
+(fiveam:test aifs-datasource-schedule-and-paths
+  (let* ((cycle (test-cycle "2026-09-24T12:00:00Z"))
+         (datasource (get-datasource 'ecmwf-aifs-wind cycle))
+         (info (datasource-info-for-cycle 'ecmwf-aifs-wind cycle))
+         (paths (datasource-info-gribpaths info)))
+    (fiveam:is (= 61 (length paths)))
+    (fiveam:is (= 360 (grib-spec-step (car (last paths)))))
+    (fiveam:is (equal "aifs-single/0p25/20260924/12/aifs-single.0p25.20260924.t12z.f000.grib2"
+                      (namestring (grib-spec-path (first paths)))))
+    (fiveam:is (equal "https://data.ecmwf.int/forecasts/20260924/12z/aifs-single/0p25/oper/20260924120000-0h-oper-fc.grib2"
+                      (data-uri datasource 0)))
+    (fiveam:is (equal "https://data.ecmwf.int/forecasts/20260924/12z/aifs-single/0p25/oper/20260924120000-0h-oper-fc.index"
+                      (index-uri datasource 0)))
+    (fiveam:is (= 6 (next-forecast datasource 0)))
+    (fiveam:is (= 24 (cycle-forecast datasource (parse-timestring "2026-09-25T13:00:00Z"))))
+    (fiveam:is (member 'ecmwf-aifs-wind *datasources*))))
+
+(fiveam:test aifs-run-specific-dissemination-selection
+  (let* ((before-06z (parse-timestring "2026-09-24T12:20:00Z"))
+         (after-06z (parse-timestring "2026-09-24T12:30:00Z"))
+         (before-12z-complete (parse-timestring "2026-09-24T19:30:00Z"))
+         (after-12z-complete (parse-timestring "2026-09-24T19:40:00Z")))
+    (fiveam:is (= 0 (cycle-run (latest-ecmwf-cycle
+                                'ecmwf-aifs-wind before-06z :availability :start))))
+    (fiveam:is (= 6 (cycle-run (latest-ecmwf-cycle
+                                'ecmwf-aifs-wind after-06z :availability :start))))
+    (fiveam:is (= 6 (cycle-run (latest-ecmwf-cycle
+                                'ecmwf-aifs-wind before-12z-complete :availability :end))))
+    (fiveam:is (= 12 (cycle-run (latest-ecmwf-cycle
+                                 'ecmwf-aifs-wind after-12z-complete :availability :end))))))
+
+(fiveam:test scheduled-cycles-match-each-datasource-run
+  (let ((time (parse-timestring "2026-10-22T19:43:00Z")))
+    (dolist (datasource *datasources*)
+      (dolist (run (schedule-runs (datasource-schedule datasource)))
+        (let ((cycle (cycle-for-run datasource run time)))
+          (fiveam:is (= run (cycle-run cycle)))
+          (fiveam:is (member run
+                             (schedule-runs
+                              (schedule (get-datasource datasource cycle))))))))
+    (let ((overnight-run (cycle-for-run 'ecmwf-aifs-wind 18
+                                        (parse-timestring "2026-10-23T00:27:00Z"))))
+      (fiveam:is (= 18 (cycle-run overnight-run)))
+      (fiveam:is (equal "20261022" (cycle-datestring overnight-run))))))
+
+(defun make-test-grib-message ()
+  (let ((message (make-array 24 :element-type '(unsigned-byte 8)
+                                :initial-element 0)))
+    (setf (aref message 0) 71
+          (aref message 1) 82
+          (aref message 2) 73
+          (aref message 3) 66
+          (aref message 15) 24
+          (aref message 20) 55
+          (aref message 21) 55
+          (aref message 22) 55
+          (aref message 23) 55)
+    message))
+
+(fiveam:test ecmwf-multipart-range-download-normalization
+  (let* ((message (make-test-grib-message))
+         (bytes (concatenate 'vector #(13 10) message #(45 45) message #(13 10)))
+         (ranges (grib-message-ranges bytes)))
+    (fiveam:is (equal '((2 . 24) (28 . 24)) ranges))))
+
 (defun make-spatial-test-uv (u-values &key (bitmap-present 0)
                                             (missing-value 9999d0))
   (make-uv :info (make-gribinfo :grid-size 4

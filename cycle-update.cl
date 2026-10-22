@@ -11,6 +11,7 @@
 (defvar *cleanup-timer*)
 (defparameter *datasources* '(noaa-gfs-wind
                               ecmwf-ifs-wind
+                              ecmwf-aifs-wind
                               gfswave-combined
                               arome-wind
                               fw-current-agulhas

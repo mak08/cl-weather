@@ -6,33 +6,93 @@
 (in-package "CL-WEATHER")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; https://confluence.ecmwf.int/display/DAC/Dissemination+schedule
+;;; https://confluence.ecmwf.int/spaces/DAC/pages/272310483/Dissemination+schedule
 
 (defun schedule-download (datasource-classname &key (async :datasource))
   "Schedule downloads for DATASOURCE."
   (ecase async ((:none :datasource :step)))
-  (let* ((schedule (datasource-schedule datasource-classname))
-         (hours
-           (mapcar
-            (lambda (run)
-              (+ run (truncate (schedule-dissem-start schedule) 60)))
-            (schedule-runs schedule)))
-         (minutes
-           (list
-            (mod (schedule-dissem-start schedule) 60))))
-    ;; Kick off download delayed by dissemination delay.
-    (log2:info "Scheduling ~a at ~a:~a" datasource-classname hours minutes)
-    (timers:add-timer
-     (lambda ()
-       (let* ((timestamp
-                (adjust-timestamp (now)
-                  (offset :minute (- (schedule-dissem-start schedule)))))
-              (datasource
-                (get-datasource datasource-classname
-                                 (make-cycle :timestamp timestamp))))
-         (download-datasource datasource)))
-     :hours hours
-     :minutes minutes)))
+  (dolist (run (schedule-runs (datasource-schedule datasource-classname)))
+    (let* ((scheduled-run run)
+           (cycle (cycle-for-run datasource-classname scheduled-run))
+           (schedule (schedule (get-datasource datasource-classname cycle)))
+           (start (schedule-dissem-start schedule))
+           (hour (mod (+ scheduled-run (truncate start 60)) 24))
+           (minute (mod start 60)))
+      (log2:info "Scheduling ~a run ~a at ~a:~a"
+                 datasource-classname scheduled-run hour minute)
+      (timers:add-timer
+       (lambda ()
+         (let* ((timestamp
+                  (adjust-timestamp (now) (offset :minute (- start))))
+                (datasource
+                  (get-datasource datasource-classname
+                                  (cycle-for-run datasource-classname
+                                                 scheduled-run timestamp))))
+           (download-datasource datasource :async async)))
+       :hours (list hour)
+       :minutes (list minute)))))
+
+(defun cycle-for-run (datasource-classname run &optional (time (now)))
+  (let* ((runs (sort (copy-list
+                      (schedule-runs (datasource-schedule datasource-classname)))
+                     #'<))
+         (interval-hours
+           (loop :for (current next) :on
+                     (append runs (list (+ 24 (first runs))))
+                 :while next
+                 :minimize (- next current))))
+    (loop :with cycle = (make-cycle :timestamp time
+                                    :interval (* interval-hours 60 60))
+          :repeat (ceiling 24 interval-hours)
+        :when (= (cycle-run cycle) run)
+          :do (return cycle)
+        :do (setf cycle (make-cycle
+                         :timestamp (adjust-timestamp
+                                     (cycle-timestamp cycle)
+                                     (offset :hour (- interval-hours)))
+                         :interval (* interval-hours 60 60)))
+        :finally (error "No cycle for run ~a in datasource ~a at ~a"
+                        run datasource-classname time))))
+
+(defmethod download-datasource ((datasource ecmwf-datasource) &key (async :none))
+  (ecase async
+    (:none (download-ecmwf-cycle datasource))
+    ((:datasource :step)
+     (bordeaux-threads:make-thread
+      (lambda () (download-ecmwf-cycle datasource))
+      :name (format nil "DOWNLOAD-ECMWF-~a-~a-~a"
+                    (name datasource)
+                    (cycle-datestring (cycle datasource))
+                    (cycle-run (cycle datasource))))))
+  datasource)
+
+(defun download-ecmwf-cycle (datasource)
+  "Retry unavailable ECMWF files through release, with a recovery window for older runs."
+  (let* ((schedule (schedule datasource))
+         (steps (schedule-steps schedule))
+         (now (now))
+         (dissemination-end
+           (adjust-timestamp
+            (cycle-timestamp (cycle datasource))
+            (offset :minute (schedule-dissem-end schedule))))
+         (deadline
+           (if (timestamp< now dissemination-end)
+               dissemination-end
+               (adjust-timestamp now (offset :minute 90)))))
+    (loop
+      :with pending
+      :do (setf pending nil)
+          (dolist (step steps)
+            (unless (probe-file (local-pathname datasource step))
+              (unless (download-step datasource step :retries 1 :quiet t)
+                (setf pending t))))
+      :when (not pending)
+        :do (return t)
+      :when (not (timestamp< (now) deadline))
+        :do (log2:warning "~a dissemination window ended with missing files for cycle ~a"
+                          (name datasource) (cycle datasource))
+            (return nil)
+      :do (sleep 30))))
 
 (defmethod download-datasource (datasource &key (async :none))
   (ecase async ((:none :datasource :step)))
@@ -46,19 +106,25 @@
       (otherwise
        (bordeaux-threads:make-thread #'download-fn :name "DATASOURCE-DOWNLOAD")))))
 
-(defmethod download-step ((datasource datasource) step &key (retries 180) (async nil))
+(defmethod download-step ((datasource datasource) step &key (retries 180) (async nil) (quiet nil))
   "Download a single step from the datasource. Signal a MISSING-GRIB
 error if the source grib was not available. If RETRY is true, retry
-after 30s for max. 90min before giving up. If ASYNC is true, run
-asynchronously."
+after 30s for RETRIES attempts. If ASYNC is true, run asynchronously."
+  (declare (ignore async))
   (let ((local-path (local-pathname datasource step)))
     (when (probe-file local-path)
-      (log2:info "File exists: ~a" local-path)
-      (return-from download-step (values t)))
+      (if (grib-file-complete-p local-path)
+          (progn
+            (log2:info "File exists: ~a" local-path)
+            (return-from download-step (values t)))
+          (progn
+            (log2:warning "Removing incomplete GRIB file ~a" local-path)
+            (delete-file local-path))))
     (ensure-directories-exist local-path)
     (dotimes (try retries)
-      (log2:info "Checking availability of ~a cycle ~a step ~a (attempt ~a/~a)"
-                 (name datasource) (cycle datasource) step (1+ try) retries)
+      (unless quiet
+        (log2:info "Checking availability of ~a cycle ~a step ~a (attempt ~a/~a)"
+                   (name datasource) (cycle datasource) step (1+ try) retries))
       (when (probe-uris datasource step)
         (log2:info "Source available; starting download of ~a cycle ~a step ~a"
                    (name datasource) (cycle datasource) step)
@@ -73,13 +139,18 @@ asynchronously."
                  (log2:warning "Incomplete or incorrect download, deleting ~a" local-path)
                  (delete-file local-path))))
           (uiop/run-program:subprocess-error (e)
+            (when (probe-file local-path)
+              (delete-file local-path))
             (log2:warning "curl error: ~a" e))
           (condition (e)
+            (when (probe-file local-path)
+              (delete-file local-path))
             (log2:warning "Unexpected condition: ~a" e))))
-      (when (< try (1- retries))
+      (when (and (not quiet) (< try (1- retries)))
         (log2:info "Waiting 30s for ~a ~a ~a" (name datasource) (cycle-run (cycle datasource)) step)
         (sleep 30)))
-    (log2:warning "Final failed download ~a ~a ~a" (name datasource) (cycle-run (cycle datasource)) step)
+    (unless quiet
+      (log2:warning "Final failed download ~a ~a ~a" (name datasource) (cycle-run (cycle datasource)) step))
     (return-from download-step nil)))
 
 (defmethod probe-uris (datasource step)
@@ -115,7 +186,62 @@ asynchronously."
            (delcmd
              (format nil "rm ~{~a~^ ~}" parts)))
       (uiop:run-program cmd)
-      (uiop:run-program delcmd))))
+      (uiop:run-program delcmd)
+      (when (typep datasource 'ecmwf-datasource)
+        (normalize-ecmwf-grib-file local-path (length ranges))))))
+
+(defun grib-message-ranges (bytes)
+  (loop
+    :with offset = 0
+    :with ranges = nil
+    :for start = (search #(71 82 73 66) bytes :start2 offset)
+    :while start
+    :do (when (> (+ start 16) (length bytes))
+          (error "Truncated GRIB indicator section at byte ~a" start))
+        (let ((message-length 0))
+          (loop :for index :from (+ start 8) :below (+ start 16)
+                :do (setf message-length
+                          (+ (* message-length 256) (aref bytes index))))
+          (unless (<= 20 message-length (- (length bytes) start))
+            (error "Invalid GRIB message length ~a at byte ~a"
+                   message-length start))
+          (unless (loop :for index :from (+ start message-length -4)
+                        :below (+ start message-length)
+                        :always (= (aref bytes index) 55))
+            (error "Missing GRIB end marker at byte ~a" start))
+          (push (cons start message-length) ranges)
+          (setf offset (+ start message-length)))
+    :finally (return (nreverse ranges))))
+
+(defun normalize-ecmwf-grib-file (pathname expected-messages)
+  (let* ((length (with-open-file (input pathname :element-type '(unsigned-byte 8))
+                   (file-length input)))
+         (bytes (make-array length :element-type '(unsigned-byte 8)))
+         (ranges nil))
+    (with-open-file (input pathname :element-type '(unsigned-byte 8))
+      (read-sequence bytes input))
+    (setf ranges (grib-message-ranges bytes))
+    (unless (= (length ranges) expected-messages)
+      (error "Expected ~a ECMWF GRIB messages in ~a, found ~a"
+             expected-messages pathname (length ranges)))
+    (let ((temporary (make-pathname
+                      :name (format nil "~a.normalized" (pathname-name pathname))
+                      :type (pathname-type pathname)
+                      :defaults pathname)))
+      (unwind-protect
+           (progn
+             (with-open-file (output temporary
+                                     :direction :output
+                                     :element-type '(unsigned-byte 8)
+                                     :if-exists :supersede
+                                     :if-does-not-exist :create)
+               (dolist (range ranges)
+                 (write-sequence bytes output
+                                 :start (car range)
+                                 :end (+ (car range) (cdr range)))))
+             (uiop:rename-file-overwriting-target temporary pathname))
+        (when (probe-file temporary)
+          (delete-file temporary))))))
 
 (defmethod download-step-1 ((datasource file-download) step local-path)
   ;; RTOFS current gribs don't support ranges (?)
