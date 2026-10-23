@@ -113,7 +113,7 @@
       (maphash
        (lambda (k v)
          (declare (ignore v))
-         (destructuring-bind (source datestring run offset resolution)
+         (destructuring-bind (offset source run datestring resolution)
              k
            (let* ((time (parse-timestring (datestring-run-to-timestamp datestring run)))
                   (remove (timestamp< time expiry)))

@@ -80,7 +80,7 @@ NOAA-style indexed loading selects the configured U and V short names for each f
 (step source-name cycle-run cycle-date resolution)
 ```
 
-The cache is an unbounded hash table between cleanup runs. The current cleanup timer is inconsistent with the insertion contract: `forecast-ht-cleanup` destructures each key as `(source datestring run offset resolution)`, then treats the second element as a date. Given the key above, this is the source name, not the cycle date. This can cause cleanup to fail instead of expiring old entries. `+datasource-ht-lock+` is declared for the datasource instance table, but `get-datasource` currently uses the forecast hash lock instead.
+The cache is an unbounded hash table between cleanup runs. `forecast-ht-cleanup` destructures each key in the same order as `get-key` and removes entries whose cycle is older than 12 hours. `+datasource-ht-lock+` is declared for the datasource instance table, but `get-datasource` currently uses the forecast hash lock instead.
 
 ## Forecast-Time Selection And Sampling
 
@@ -134,7 +134,7 @@ The package declaration also exports legacy names that have no matching function
 - **Active core:** datasource selection for scheduled providers, GFS/AROME/FairWinds/wave retrieval paths, GRIB decoding, forecast caching, `get-params`, `interpolate-uv`, and `interpolate-simple`.
 - **Declared but partial providers:** ECMWF AIFS, NOAA RTOFS, and NOAA AIGFS have some metadata or URI methods but are not included in scheduled updates and lack necessary end-to-end selection/loading methods. ECMWF IFS is active for route computation.
 - **Stale or unfinished subsystems:** `prediction.cl`'s merge interpolation path and `tiles.cl`'s tile-generation path do not match the current ASDF/API/data model. `test.cl` is also not loaded as part of the ASDF system and contains older `load-forecast` and interpolation calling conventions.
-- **Retention concerns:** the cache cleanup key order is wrong, and on-disk cleanup omits non-resolution directory layouts.
+- **Retention concerns:** on-disk cleanup omits non-resolution directory layouts.
 - **Step-range concern:** GFS-wave and FairWinds cycle selectors can return offsets as high as 168 hours, while their datasource `maxstep` values are 48. Since `load-forecast` clamps to `maxstep`, requests beyond 48 hours reuse the 48-hour entry rather than the selected later offset.
 - **Async option concern:** `download-datasource` passes an `:async` flag to `download-step` for `:async :step`, but `download-step` does not branch on that argument. Only datasource-level asynchronous downloading is implemented.
 
