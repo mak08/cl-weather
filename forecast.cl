@@ -22,6 +22,20 @@
           (load-datasource-forecasts datasource step))
         (gethash key *forecast-ht*)))))
 
+(defun get-direction-key (datasource step)
+  (let ((key (get-key datasource step)))
+    (setf (second key) (concatenate 'string (name datasource) "-dir"))
+    key))
+
+(defmethod load-direction-forecast (datasource step)
+  "Return wave direction data from cache, fill cache if needed."
+  (let ((max (maxstep datasource)))
+    (when (> step max)
+      (setf step max))
+    (load-forecast datasource step)
+    (bordeaux-threads:with-lock-held (+forecast-ht-lock+)
+      (gethash (get-direction-key datasource step) *forecast-ht*))))
+
 (defun get-key (datasource step)
   (list step
         (name datasource)
@@ -85,10 +99,18 @@
         (let* ((query (list (list "discipline" 10)
                             (list "parameterCategory" 0)
                             (list "parameterNumber" 3)))
-               (messages (get-messages-from-index index query)))
+               (dir-query (list (list "discipline" 10)
+                                (list "parameterCategory" 0)
+                                (list "parameterNumber" 10)))
+               (messages (get-messages-from-index index query))
+               (dir-messages (get-messages-from-index index dir-query)))
           (dolist (message messages)
             (let ((step (gribmessage-step message)))
-              (setf (gethash (get-key datasource step) *forecast-ht*) message))))))))
+              (setf (gethash (get-key datasource step) *forecast-ht*) message)))
+          (dolist (message dir-messages)
+            (let ((step (gribmessage-step message)))
+              (setf (gethash (get-direction-key datasource step) *forecast-ht*)
+                    message))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Cleanup forecast HT to avoid memory exhaustion

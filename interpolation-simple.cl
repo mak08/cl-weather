@@ -8,7 +8,9 @@
 (in-package "CL-WEATHER")
 
 (declaim (inline get-value))
-(defun get-value (fraction lat lon fc-0 fc-1)
+(defun get-value (fraction lat lon fc-0 fc-1 &optional circular)
+  "Bilinear/temporal interpolation. With CIRCULAR, values are directions in degrees
+and are interpolated via their sine/cosine components."
   (declare (double-float fraction lat lon)
            (type gribmessage fc-0 fc-1))
   (let* ((info (gribmessage-info fc-0))
@@ -36,10 +38,21 @@
           (u10-1 (aref data-1 i10))
           (u01-1 (aref data-1 i01))
           (u11-1 (aref data-1 i11)))
-      (let* ((u-0 (bilinear wlat wlon u00-0 u01-0 u10-0 u11-0))
-             (u-1 (bilinear wlat wlon u00-1 u01-1 u10-1 u11-1))
-             (u (linear fraction u-0 u-1)))
-        (values u)))))
+      (if circular
+          (flet ((comp (fn)
+                   (declare (function fn))
+                   (flet ((c (d) (funcall fn (* d (/ pi 180d0)))))
+                     (let* ((a-0 (bilinear wlat wlon (c u00-0) (c u01-0) (c u10-0) (c u11-0)))
+                            (a-1 (bilinear wlat wlon (c u00-1) (c u01-1) (c u10-1) (c u11-1))))
+                       (linear fraction a-0 a-1)))))
+            (let ((s (comp #'sin))
+                  (c (comp #'cos)))
+              (declare (double-float s c))
+              (values (mod (* (atan s c) (/ 180d0 pi)) 360d0))))
+          (let* ((u-0 (bilinear wlat wlon u00-0 u01-0 u10-0 u11-0))
+                 (u-1 (bilinear wlat wlon u00-1 u01-1 u10-1 u11-1))
+                 (u (linear fraction u-0 u-1)))
+            (values u))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; API
@@ -57,6 +70,21 @@
        (get-value fraction lat lon fc-0 fc-1))
       (t
        (values 0d0)))))
-  
+
+(declaim (inline interpolate-direction))
+(defun interpolate-direction (lat lon params)
+  "Interpolate a direction field (degrees); PARAMS from GET-DIRECTION-PARAMS."
+  (declare (double-float lat lon)
+           (type params params))
+  (let ((fc-0 (params-fc0 params))
+        (fc-1 (params-fc1 params))
+        (fraction (params-fraction params)))
+    (declare (type gribmessage fc-0 fc-1))
+    (cond
+      ((valid-position lat lon (gribmessage-info fc-0))
+       (get-value fraction lat lon fc-0 fc-1 t))
+      (t
+       (values 0d0)))))
+
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

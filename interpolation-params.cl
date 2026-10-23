@@ -29,6 +29,25 @@
          (fraction (forecast-fraction fc-0 fc-1 timestamp)))
     (make-params :fc0 fc-0 :fc1 fc-1 :fraction fraction)))
 
+(defun get-direction-params (datasource timestamp
+                             &key
+                               (cycle (timestamp-cycle datasource timestamp)))
+  "Like GET-PARAMS, but for the direction field of wave datasources."
+  (handler-case
+      (get-direction-params-for-cycle datasource timestamp :cycle cycle)
+    (missing-forecast ()
+      (get-direction-params-for-cycle datasource timestamp
+                                      :cycle (previous-cycle datasource cycle)))))
+
+(defun get-direction-params-for-cycle (datasource-classname timestamp &key cycle)
+  (let* ((datasource (get-datasource datasource-classname cycle))
+         (step-0 (cycle-forecast datasource timestamp))
+         (step-1 (next-forecast datasource step-0))
+         (fc-0 (load-direction-forecast datasource step-0))
+         (fc-1 (load-direction-forecast datasource step-1))
+         (fraction (forecast-fraction fc-0 fc-1 timestamp)))
+    (make-params :fc0 fc-0 :fc1 fc-1 :fraction fraction)))
+
 (declaim (inline valid-position))
 (defun valid-position (lat lon info)
   (declare (double-float lat lon)

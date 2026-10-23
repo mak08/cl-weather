@@ -43,6 +43,7 @@
            "CYCLE-RUN"
 
            "GET-PARAMS"
+           "GET-DIRECTION-PARAMS"
            "PARAMS-FC0"
            "PARAMS-FC1"
            "PARAMS-FRACTION"
@@ -51,6 +52,7 @@
            "TIMESTAMP-TO-TIMESPEC"
 
            "INTERPOLATE-SIMPLE"
+           "INTERPOLATE-DIRECTION"
            "INTERPOLATE-UV"
            "UV-CYCLE"
 
