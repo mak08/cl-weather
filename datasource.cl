@@ -274,13 +274,16 @@ The cycle-run must be a valid run for the datasource when making a datasource in
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; ECMWF
 
+;;; IFS open data is published at the end of the ECMWF dissemination
+;;; window (observed 07:34 for 00/12z, 06:27 for 06/18z). DISSEM-END adds
+;;; 30 minutes of margin.
 (defmethod datasource-schedule ((datasource (eql 'ecmwf-ifs-wind)))
   (make-schedule :runs '(0 6 12 18)
                  :steps (append
          (loop :for s :to 144 :by 3 :collect s)
                          (loop :for s :from 150 :to 360 :by 6 :collect s))
                  :dissem-start 345
-                 :dissem-end 454))
+                 :dissem-end 484))
 
 (defmethod datasource-schedule-for-cycle ((datasource (eql 'ecmwf-ifs-wind)) cycle)
   (let* ((schedule (datasource-schedule datasource))
@@ -289,14 +292,14 @@ The cycle-run must be a valid run for the datasource when making a datasource in
         (make-schedule :runs (schedule-runs schedule)
                        :steps (remove-if (lambda (step) (> step 144)) steps)
                        :dissem-start 345
-                       :dissem-end 387)
+                       :dissem-end 417)
         schedule)))
 
 (defmethod datasource-schedule ((datasource (eql 'ecmwf-aifs-wind)))
   (make-schedule :runs '(0 6 12 18)
                  :steps (loop :for s :from 0 :to 360 :by 6 :collect s)
                  :dissem-start 345
-                 :dissem-end 454))
+                 :dissem-end 484))
 
 (defmethod datasource-schedule-for-cycle ((datasource (eql 'ecmwf-aifs-wind)) cycle)
   (let ((schedule (datasource-schedule datasource)))
@@ -304,7 +307,7 @@ The cycle-run must be a valid run for the datasource when making a datasource in
         (make-schedule :runs (schedule-runs schedule)
                        :steps (schedule-steps schedule)
                        :dissem-start 387
-                       :dissem-end 387)
+                       :dissem-end 484)
         schedule)))
 
 (defmethod current-cycle ((datasource (eql 'ecmwf-ifs-wind)))

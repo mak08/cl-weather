@@ -81,6 +81,7 @@
                (adjust-timestamp now (offset :minute 90)))))
     (loop
       :with pending
+      :for pass-start = (now)
       :do (setf pending nil)
           (dolist (step steps)
             (unless (probe-file (local-pathname datasource step))
@@ -88,7 +89,9 @@
                 (setf pending t))))
       :when (not pending)
         :do (return t)
-      :when (not (timestamp< (now) deadline))
+      ;; Give up only if the pass started after the deadline, so that files
+      ;; released while a pass was running get another chance.
+      :when (not (timestamp< pass-start deadline))
         :do (log2:warning "~a dissemination window ended with missing files for cycle ~a"
                           (name datasource) (cycle datasource))
             (return nil)
