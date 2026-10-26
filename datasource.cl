@@ -295,20 +295,14 @@ The cycle-run must be a valid run for the datasource when making a datasource in
                        :dissem-end 417)
         schedule)))
 
+;;; AIFS-single: ECMWF's published schedule lists 06z/18z as a single
+;;; transfer at +6:27, but in practice all four runs are disseminated like
+;;; the 00/12z runs (observed: step 0 at +5:45, step 360 at +7:34).
 (defmethod datasource-schedule ((datasource (eql 'ecmwf-aifs-wind)))
   (make-schedule :runs '(0 6 12 18)
                  :steps (loop :for s :from 0 :to 360 :by 6 :collect s)
                  :dissem-start 345
                  :dissem-end 484))
-
-(defmethod datasource-schedule-for-cycle ((datasource (eql 'ecmwf-aifs-wind)) cycle)
-  (let ((schedule (datasource-schedule datasource)))
-    (if (member (cycle-run cycle) '(6 18))
-        (make-schedule :runs (schedule-runs schedule)
-                       :steps (schedule-steps schedule)
-                       :dissem-start 387
-                       :dissem-end 484)
-        schedule)))
 
 (defmethod current-cycle ((datasource (eql 'ecmwf-ifs-wind)))
   "Cycle currently used by the router."
