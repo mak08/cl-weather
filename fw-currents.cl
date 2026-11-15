@@ -7,8 +7,6 @@
 
 ;;; FW  Current
 ;;; Agulhas now uses global_agulhas_ggr_YYYYMMDD.grb2 (verified on /wind, 2026-11-15).
-;;; The former East Australia filename below currently has no published replacement.
-;;; https://kxdpgsxzhepthjpeghta.supabase.co/storage/v1/object/public/gribs/currents/20260124/global_east_australia_20260124.grb2
 ;;; https://kxdpgsxzhepthjpeghta.supabase.co/storage/v1/object/public/gribs/currents/20260124/ibi_english_channel_20260124.grb2
 ;;; https://kxdpgsxzhepthjpeghta.supabase.co/storage/v1/object/public/gribs/currents/20260124/sfbofs_sf_bay_20260124_15z.grb2
 ;;; https://kxdpgsxzhepthjpeghta.supabase.co/storage/v1/object/public/gribs/currents/20260124/rtofs_west_atl_20260124_6hourly.grb2
@@ -22,9 +20,6 @@
   ((name :initform "global_agulhas")
    (maxstep :initform 120)
    (schedule :initform (datasource-schedule 'fw-current))))
-(defclass fw-current-east-australia (fw-current)
-  ((name :initform "global_east_australia")
-   (schedule :initform (datasource-schedule 'fw-current))))
 (defclass fw-current-english-channel (fw-current)
   ((name :initform "ibi_english_channel")
    (schedule :initform (datasource-schedule 'fw-current))))
@@ -36,28 +31,20 @@
   (make-schedule :runs '(0) :steps '(0) :dissem-start 460 :dissem-end 490))
 (defmethod datasource-schedule ((datasource (eql 'fw-current-agulhas)))
   (make-schedule :runs '(0) :steps '(0) :dissem-start 460 :dissem-end 490))
-(defmethod datasource-schedule ((datasource (eql 'fw-current-east-australia)))
-  (make-schedule :runs '(0) :steps '(0) :dissem-start 460 :dissem-end 490))
 (defmethod datasource-schedule ((datasource (eql 'fw-current-english-channel)))
   (make-schedule :runs '(0) :steps '(0) :dissem-start 460 :dissem-end 490))
 
 (defmethod current-cycle ((datasource (eql 'fw-current-agulhas)))
-  (current-cycle-fw))
-(defmethod current-cycle ((datasource (eql 'fw-current-east-australia)))
   (current-cycle-fw))
 (defmethod current-cycle ((datasource (eql 'fw-current-english-channel)))
   (current-cycle-fw))
 
 (defmethod latest-complete-cycle ((datasource (eql 'fw-current-agulhas)) &optional (time (now)))
   (latest-complete-cycle-fw time))
-(defmethod latest-complete-cycle ((datasource (eql 'fw-current-east-australia)) &optional (time (now)))
-  (latest-complete-cycle-fw time))
 (defmethod latest-complete-cycle ((datasource (eql 'fw-current-english-channel)) &optional (time (now)))
   (latest-complete-cycle-fw time))
 
 (defmethod timestamp-cycle ((datasource (eql 'fw-current-agulhas)) timestamp)
-  (timestamp-cycle-fw datasource timestamp))
-(defmethod timestamp-cycle ((datasource (eql 'fw-current-east-australia)) timestamp)
   (timestamp-cycle-fw datasource timestamp))
 (defmethod timestamp-cycle ((datasource (eql 'fw-current-english-channel)) timestamp)
   (timestamp-cycle-fw datasource timestamp))

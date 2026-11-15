@@ -16,7 +16,6 @@
                               gfswave-combined
                               arome-wind
                               fw-current-agulhas
-                              fw-current-east-australia
                               fw-current-english-channel))
 
 (defun start-cycle-updates ()
