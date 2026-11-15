@@ -79,6 +79,21 @@
           (log2:trace "loading ~a step ~a" datasource step)
           (setf (gethash (get-key datasource step) *forecast-ht*) uv))))))
 
+(defun clear-missing-current-vectors (field)
+  "Turn bitmap-missing ocean components into zero flow before interpolation.
+ecCodes represents missing land values as 9999, which must never become speed."
+  (when field
+      (let ((missing (gribinfo-missing-value (uv-info field)))
+            (u (uv-u-array field)) (v (uv-v-array field)))
+        (dotimes (i (length u))
+          (when (or (= (aref u i) missing) (= (aref v i) missing))
+            (setf (aref u i) 0d0 (aref v i) 0d0)))))
+  field)
+
+(defmethod load-datasource-forecasts :after ((datasource ecmwf-ifs-current) step)
+  "Remove land bitmap sentinels from newly decoded IFS current components."
+  (clear-missing-current-vectors (gethash (get-key datasource step) *forecast-ht*)))
+
 (defmethod load-datasource-forecasts ((datasource gfswave-combined) step)
   (let* ((file-step (file-step datasource step))
          (filename (namestring (local-pathname datasource file-step))))

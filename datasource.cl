@@ -102,7 +102,10 @@
 
 (defclass ecmwf-datasource (datasource range-download)
   ())
-(defclass ecmwf-ifs-wind (ecmwf-datasource datakind-wind)
+(defclass ecmwf-ifs-datasource (ecmwf-datasource)
+  ()
+  (:documentation "Shared forecast-step handling for IFS wind and ocean currents."))
+(defclass ecmwf-ifs-wind (ecmwf-ifs-datasource datakind-wind)
   ((name :initform "ifs")
    (location :initform "https://data.ecmwf.int/forecasts/")
     (schedule :initform (datasource-schedule 'ecmwf-ifs-wind))
@@ -115,6 +118,15 @@
   ((name :initform "aifs-single")
    (location :initform "https://data.ecmwf.int/forecasts/")
    (schedule :initform (datasource-schedule 'ecmwf-aifs-wind))))
+
+(defclass ecmwf-ifs-current (ecmwf-ifs-datasource datakind-current)
+  ((name :initform "ifs-current")
+   (location :initform "https://data.ecmwf.int/forecasts/")
+   (maxstep :initform 360)
+   (datakind :initform "current")
+   (uv-variables :initform '("sve" "svn"))
+   (schedule :initform (datasource-schedule 'ecmwf-ifs-current)))
+  (:documentation "Global surface sea-water velocity from IFS open-data atmospheric files."))
 
 (defclass arome-wind (datasource file-download datakind-wind)
   ((name :initform "arome")
@@ -381,7 +393,7 @@ The cycle-run must be a valid run for the datasource when making a datasource in
          (end (if (member run '(0 12)) 454 387)))
     (<= 345 elapsed end)))
 
-(defmethod maxstep ((datasource ecmwf-ifs-wind))
+(defmethod maxstep ((datasource ecmwf-ifs-datasource))
   (car (last (schedule-steps (schedule datasource)))))
 
 (defmethod timestamp-cycle ((datasource (eql 'ecmwf-ifs-wind)) timestamp)
@@ -396,7 +408,7 @@ The cycle-run must be a valid run for the datasource when making a datasource in
     :do (setf cycle (previous-cycle datasource cycle))
     :finally (return (current-cycle datasource))))
 
-(defmethod cycle-forecast ((datasource ecmwf-ifs-wind) timestamp)
+(defmethod cycle-forecast ((datasource ecmwf-ifs-datasource) timestamp)
   (let* ((cycle-time (cycle-timestamp (cycle datasource)))
          (elapsed (timestamp-difference timestamp cycle-time))
          (steps (schedule-steps (schedule datasource)))
@@ -409,7 +421,7 @@ The cycle-run must be a valid run for the datasource when making a datasource in
           :do (setf selected step)
           :finally (return selected))))
 
-(defmethod next-forecast ((datasource ecmwf-ifs-wind) forecast)
+(defmethod next-forecast ((datasource ecmwf-ifs-datasource) forecast)
   (or (find-if (lambda (step) (> step forecast)) (schedule-steps (schedule datasource)))
       forecast))
 
@@ -436,12 +448,45 @@ The cycle-run must be a valid run for the datasource when making a datasource in
 (defmethod data-uri ((datasource ecmwf-datasource) step)
   (ecmwf-ifs-wind-uri datasource step "grib2"))
 
-(defun ecmwf-ifs-wind-uri (datasource step type)
+(defun ecmwf-ifs-wind-uri (datasource step type &optional (model (name datasource)))
   (let* ((cycle (cycle datasource))
          (run (format nil "~2,,,'0@a" (cycle-run cycle)))
          (date (cycle-datestring cycle)))
     (format nil "~a~a/~az/~a/~a/oper/~a~a0000-~ah-oper-fc.~a"
-            (location datasource) date run (name datasource) (resolution datasource) date run step type)))
+            (location datasource) date run model (resolution datasource) date run step type)))
+
+;;; Current fields share IFS files and timing, but have a separate local cache.
+(defmethod datasource-schedule ((source (eql 'ecmwf-ifs-current)))
+  "Use the IFS atmospheric-file release schedule."
+  (datasource-schedule 'ecmwf-ifs-wind))
+
+(defmethod datasource-schedule-for-cycle ((source (eql 'ecmwf-ifs-current)) cycle)
+  "Honor the shorter forecast horizon of 06/18Z IFS runs."
+  (datasource-schedule-for-cycle 'ecmwf-ifs-wind cycle))
+
+(defmethod current-cycle ((source (eql 'ecmwf-ifs-current)))
+  "Select the same nominally available run as IFS wind."
+  (current-cycle 'ecmwf-ifs-wind))
+
+(defmethod latest-complete-cycle ((source (eql 'ecmwf-ifs-current)) &optional (time (now)))
+  "Select the nominally complete IFS run at TIME."
+  (latest-complete-cycle 'ecmwf-ifs-wind time))
+
+(defmethod timestamp-cycle ((source (eql 'ecmwf-ifs-current)) timestamp)
+  "Choose an IFS cycle whose forecast horizon includes TIMESTAMP."
+  (timestamp-cycle 'ecmwf-ifs-wind timestamp))
+
+(defmethod cycle-updating-p ((source (eql 'ecmwf-ifs-current)) &optional (time (now)))
+  "Use the IFS wind dissemination window for current downloads."
+  (cycle-updating-p 'ecmwf-ifs-wind time))
+
+(defmethod index-uri ((source ecmwf-ifs-current) step)
+  "Read current byte ranges from the shared IFS atmospheric index."
+  (ecmwf-ifs-wind-uri source step "index" "ifs"))
+
+(defmethod data-uri ((source ecmwf-ifs-current) step)
+  "Download surface current components from the IFS atmospheric file."
+  (ecmwf-ifs-wind-uri source step "grib2" "ifs"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; NOAA GFS

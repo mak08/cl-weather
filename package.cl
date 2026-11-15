@@ -58,6 +58,7 @@
 
            "NOAA-GFS-WIND"
            "GFSWAVE-COMBINED"
+           "ECMWF-IFS-CURRENT"
            "DATASOURCE-INFO"
            "*LATEST-FORECAST*"
            "*FORECAST-HT*"

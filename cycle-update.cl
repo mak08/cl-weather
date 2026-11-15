@@ -12,6 +12,7 @@
 (defparameter *datasources* '(noaa-gfs-wind
                               ecmwf-ifs-wind
                               ecmwf-aifs-wind
+                              ecmwf-ifs-current
                               gfswave-combined
                               arome-wind
                               fw-current-agulhas
