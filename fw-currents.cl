@@ -6,7 +6,8 @@
 (in-package "CL-WEATHER")
 
 ;;; FW  Current
-;;; https://kxdpgsxzhepthjpeghta.supabase.co/storage/v1/object/public/gribs/currents/20260124/global_agulhas_20260124.grb2
+;;; Agulhas now uses global_agulhas_ggr_YYYYMMDD.grb2 (verified on /wind, 2026-11-15).
+;;; The former East Australia filename below currently has no published replacement.
 ;;; https://kxdpgsxzhepthjpeghta.supabase.co/storage/v1/object/public/gribs/currents/20260124/global_east_australia_20260124.grb2
 ;;; https://kxdpgsxzhepthjpeghta.supabase.co/storage/v1/object/public/gribs/currents/20260124/ibi_english_channel_20260124.grb2
 ;;; https://kxdpgsxzhepthjpeghta.supabase.co/storage/v1/object/public/gribs/currents/20260124/sfbofs_sf_bay_20260124_15z.grb2
@@ -19,6 +20,7 @@
    (maxstep :initform 48)))
 (defclass fw-current-agulhas (fw-current)
   ((name :initform "global_agulhas")
+   (maxstep :initform 120)
    (schedule :initform (datasource-schedule 'fw-current))))
 (defclass fw-current-east-australia (fw-current)
   ((name :initform "global_east_australia")
@@ -61,7 +63,7 @@
   (timestamp-cycle-fw datasource timestamp))
 
 (defmethod cycle-forecast ((datasource fw-current) timestamp)
-  ;; Return the 3-hour-forecast required for $timestamp when using $cycle
+  ;; Select a six-hour frame and hold the final field at the source's own horizon.
   (let* ((cycle (cycle datasource))
          (basetime (cycle-timestamp cycle)) 
          (difference (truncate
@@ -70,15 +72,12 @@
     (cond
       ((minusp difference)
        (error "~a is in the past of cycle ~a" timestamp cycle))
-      ((<= difference (* 28 6))
-       (* 6 (truncate difference 6)))
       (t
-       (log2:warning "~a is in the future of cycle ~a" timestamp cycle)
-       (* 28 6)))))
+       (min (maxstep datasource) (* 6 (truncate difference 6)))))))
 
 (defmethod next-forecast ((datasource fw-current) forecast)
-  ;; Return the next 6-hour-forecast
-  (min (+ forecast 6) (* 28 6)))
+  ;; Do not ask the loader for frames beyond this source's forecast horizon.
+  (min (+ forecast 6) (maxstep datasource)))
 
 (defmethod local-pathname ((datasource fw-current) step &key (relative nil))
   (let* ((srcname (name datasource))
@@ -106,6 +105,12 @@
          (date (cycle-datestring cycle)))
     (format nil "~a~a/~a_~a.grb2"
             (location datasource) date name date)))
+
+(defmethod data-uri ((datasource fw-current-agulhas) step)
+  "Use the GGR filename published by Fairwinds, retaining the existing local cache name."
+  (declare (ignore step))
+  (let ((date (cycle-datestring (cycle datasource))))
+    (format nil "~a~a/global_agulhas_ggr_~a.grb2" (location datasource) date date)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Aux methods
