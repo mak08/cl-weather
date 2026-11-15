@@ -13,7 +13,7 @@
 (defclass gfswave (fw-datasource datakind-wave)
   ((name :initform "gfswave")
    (location :initform "https://kxdpgsxzhepthjpeghta.supabase.co/storage/v1/object/public/gribs/gfswave/")
-   (maxstep :initform 48)))
+   (maxstep :initform 240)))
 (defclass gfswave-combined (gfswave)
   ((name :initform "gfswave-combined")
    (schedule :initform (datasource-schedule 'gfswave-combined))))
@@ -53,7 +53,7 @@
                                            (adjust-timestamp ts (offset :hour -4))) 24h))))))
 
 (defmethod cycle-forecast ((datasource gfswave-combined) timestamp)
-  ;; Return the 3-hour-forecast required for $timestamp when using $cycle
+  ;; Combined files start at hour 6, every 3 hours through 120, then every 6.
   (let* ((cycle (cycle datasource))
          (basetime (cycle-timestamp cycle)) 
          (difference (truncate
@@ -62,15 +62,12 @@
     (cond
       ((minusp difference)
        (error "~a is in the past of cycle ~a" timestamp cycle))
-      ((<= difference (* 28 6))
-       (* 6 (truncate difference 6)))
-      (t
-       (log2:warning "~a is in the future of cycle ~a" timestamp cycle)
-       (* 28 6)))))
+      ((< difference 120) (max 6 (* 3 (truncate difference 3))))
+      (t (min (maxstep datasource) (* 6 (truncate difference 6)))))))
 
 (defmethod next-forecast ((datasource gfswave-combined) forecast)
-  ;; Return the next 6-hour-forecast
-  (min (+ forecast 6) (* 28 6)))
+  ;; Do not request a frame beyond the combined file's horizon.
+  (min (+ forecast (if (< forecast 120) 3 6)) (maxstep datasource)))
 
 (defmethod local-pathname ((datasource gfswave-combined) step &key (relative nil))
   (let* ((srcname (name datasource))
