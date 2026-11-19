@@ -150,7 +150,8 @@
         (j-inc (coerce (codes-get-double message "jDirectionIncrementInDegrees") 'double-float)) ; "south to north"
         (i-inc (coerce (codes-get-double message "iDirectionIncrementInDegrees") 'double-float)) ; "west to east"
         )
-    (when (= 0d0 (mod (incf lon-end i-inc) 360) lon-start)
+    ;; Detect a global seam without extending regional coverage by one cell.
+    (when (= 0d0 (mod (+ lon-end i-inc) 360) lon-start)
       (log2:trace "wrap around grib")
       (setf lon-end 360d0))
     (make-gribinfo

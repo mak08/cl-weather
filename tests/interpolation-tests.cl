@@ -149,10 +149,11 @@
                           'ecmwf-ifs-wind
                           (test-cycle "2026-09-24T18:00:00Z"))))
     (fiveam:is (= 345 (schedule-dissem-start long-schedule)))
-    (fiveam:is (= 454 (schedule-dissem-end long-schedule)))
+    ;; Observed completion plus the configured 30-minute safety margin.
+    (fiveam:is (= 484 (schedule-dissem-end long-schedule)))
     (fiveam:is (= 360 (car (last (schedule-steps long-schedule)))))
     (fiveam:is (= 345 (schedule-dissem-start short-schedule)))
-    (fiveam:is (= 387 (schedule-dissem-end short-schedule)))
+    (fiveam:is (= 417 (schedule-dissem-end short-schedule)))
     (fiveam:is (= 144 (car (last (schedule-steps short-schedule)))))
     (fiveam:is (member 'ecmwf-ifs-wind *datasources*))))
 
@@ -174,10 +175,11 @@
     (fiveam:is (member 'ecmwf-aifs-wind *datasources*))))
 
 (fiveam:test aifs-run-specific-dissemination-selection
-  (let* ((before-06z (parse-timestring "2026-09-24T12:20:00Z"))
-         (after-06z (parse-timestring "2026-09-24T12:30:00Z"))
-         (before-12z-complete (parse-timestring "2026-09-24T19:30:00Z"))
-         (after-12z-complete (parse-timestring "2026-09-24T19:40:00Z")))
+  ;; All AIFS runs now start at +5h45; completion includes the 30-minute margin.
+  (let* ((before-06z (parse-timestring "2026-09-24T11:44:59Z"))
+         (after-06z (parse-timestring "2026-09-24T11:45:00Z"))
+         (before-12z-complete (parse-timestring "2026-09-24T20:03:59Z"))
+         (after-12z-complete (parse-timestring "2026-09-24T20:04:00Z")))
     (fiveam:is (= 0 (cycle-run (latest-ecmwf-cycle
                                 'ecmwf-aifs-wind before-06z :availability :start))))
     (fiveam:is (= 6 (cycle-run (latest-ecmwf-cycle
@@ -186,6 +188,29 @@
                                 'ecmwf-aifs-wind before-12z-complete :availability :end))))
     (fiveam:is (= 12 (cycle-run (latest-ecmwf-cycle
                                  'ecmwf-aifs-wind after-12z-complete :availability :end))))))
+
+(fiveam:test ecmwf-cycle-selection-at-every-scheduled-boundary
+  ;; Compare full timestamps to cover day rollover as well as run numbers.
+  (dolist (source '(ecmwf-ifs-wind ecmwf-ifs-current ecmwf-aifs-wind))
+    (dolist (timestamp '("2026-09-24T00:00:00Z" "2026-09-24T06:00:00Z"
+                         "2026-09-24T12:00:00Z" "2026-09-24T18:00:00Z"))
+      (let* ((cycle (test-cycle timestamp))
+             (previous (previous-cycle source cycle))
+             (schedule (datasource-schedule-for-cycle source cycle)))
+        (dolist (availability '(:start :end))
+          (let* ((minutes (ecase availability
+                            (:start (schedule-dissem-start schedule))
+                            (:end (schedule-dissem-end schedule))))
+                 (boundary (adjust-timestamp (cycle-timestamp cycle) (offset :minute minutes))))
+            (dolist (seconds '(-1 0 1))
+              (let* ((time (adjust-timestamp boundary (offset :sec seconds)))
+                     (expected (cycle-timestamp (if (minusp seconds) previous cycle))))
+                (fiveam:is (timestamp= expected
+                                      (cycle-timestamp (latest-ecmwf-cycle source time :availability availability))))
+                (when (eq availability :end)
+                  ;; The public selector must agree with the download schedule.
+                  (fiveam:is (timestamp= expected
+                                        (cycle-timestamp (latest-complete-cycle source time)))))))))))))
 
 (fiveam:test scheduled-cycles-match-each-datasource-run
   (let ((time (parse-timestring "2026-10-22T19:43:00Z")))
@@ -286,5 +311,81 @@
       (declare (ignore direction v))
       (fiveam:is (= 5d0 u))
       (fiveam:is (= 5d0 speed)))))
+
+(defun regional-test-info (&key (i-scan-neg 0) (j-scan-pos 1) (lon-start 348.000710d0))
+  "A small non-zero-aligned grid using the actual IBI origin and increments."
+  (let ((dx 0.027779d0) (lat 47.027108d0))
+    (make-gribinfo :grid-size 9 :lat-points 3 :lon-points 3
+                   :lat-start lat :lat-end (+ lat (* (if (= j-scan-pos 1) 2 -2) dx))
+                   :lon-start lon-start :lon-end (mod (+ lon-start (* (if (= i-scan-neg 1) -2 2) dx)) 360d0)
+                   :i-inc dx :j-inc dx :i-scan-neg i-scan-neg :j-scan-pos j-scan-pos)))
+
+(defun regular-test-params (info &optional (scale 1d0))
+  "Synthetic vectors whose node values make row/column mistakes visible."
+  (let* ((count (* (gribinfo-lat-points info) (gribinfo-lon-points info)))
+         (u (make-array count :element-type 'double-float))
+         (v (make-array count :element-type 'double-float)))
+    (dotimes (i count)
+      (setf (aref u i) (* scale (1+ i)) (aref v i) (* 2d0 scale (1+ i))))
+    (spatial-test-params (make-uv :info info :source "regional" :u-array u :v-array v))))
+
+(fiveam:test regional-offset-grid-interpolation-and-zero-outside
+  (dolist (east '(0 1))
+    (dolist (north '(0 1))
+      ;; Exercise signed and unsigned longitudes, crossing Greenwich and 180°.
+      (dolist (origin '(348.000710d0 -11.999290d0 359.99d0 179.99d0))
+        (let* ((info (regional-test-info :i-scan-neg east :j-scan-pos north :lon-start origin))
+               (params (regular-test-params info))
+               (dx (* (if (= east 1) -1d0 1d0) (gribinfo-i-inc info)))
+               (dy (* (if (= north 1) 1d0 -1d0) (gribinfo-j-inc info)))
+               (lat (gribinfo-lat-start info)))
+          (labels ((sample (r c)
+                     (interpolate-uv (+ lat (* r dy)) (+ origin (* c dx)) params)))
+            (dotimes (r 3)
+              (dotimes (c 3)
+                (fiveam:is (< (abs (- (nth-value 2 (sample r c)) (+ 1 (* r 3) c))) 1d-6))))
+            (fiveam:is (< (abs (- (nth-value 2 (sample 0.5d0 0.5d0)) 3d0)) 1d-6))
+            (dolist (rc '((-0.01d0 1d0) (2.01d0 1d0) (1d0 -0.01d0) (1d0 2.01d0)))
+              (fiveam:is (equal '(0d0 0d0 0d0 0d0)
+                                (multiple-value-list (sample (first rc) (second rc)))))))))))
+  ;; Temporal interpolation uses the same correctly anchored nodes.
+  (let* ((info (regional-test-info))
+         (params (regular-test-params info))
+         (next (regular-test-params info 2d0)))
+    (setf (params-fc1 params) (params-fc0 next) (params-fraction params) 0.5d0)
+    (fiveam:is (< (abs (- (nth-value 2 (interpolate-uv (+ 47.027108d0 0.0138895d0)
+                                                        (+ 348.000710d0 0.0138895d0) params))
+                          4.5d0)) 1d-6))))
+
+(fiveam:test global-seam-poles-and-scalar-regional-fields
+  (let* ((info (make-gribinfo :grid-size 12 :lat-points 3 :lon-points 4
+                             :lat-start 90d0 :lat-end -90d0 :lon-start 0d0 :lon-end 360d0
+                             :i-inc 90d0 :j-inc 90d0))
+         (params (regular-test-params info)))
+    (fiveam:is (= 2.5d0 (nth-value 2 (interpolate-uv 90d0 315d0 params))))
+    (fiveam:is (= 2.5d0 (nth-value 2 (interpolate-uv 90d0 -45d0 params))))
+    (fiveam:is (= 4.5d0 (nth-value 2 (interpolate-uv 45d0 135d0 params))))
+    (fiveam:is (< (abs (- (nth-value 2 (interpolate-uv 72d0 315d0 params)) 3.3d0)) 1d-10))
+    (fiveam:is (= 12d0 (nth-value 2 (interpolate-uv -90d0 270d0 params))))
+    (fiveam:is (equal '(0d0 0d0 0d0 0d0) (multiple-value-list (interpolate-uv -91d0 0d0 params)))))
+  (let* ((info (regional-test-info :lon-start 359.99d0))
+         (uv-params (regular-test-params info))
+         (field (make-gribmessage :info info :data (uv-u-array (params-fc0 uv-params))))
+         (params (make-params :fc0 field :fc1 field :fraction 0d0)))
+    (fiveam:is (< (abs (- (interpolate-simple (+ 47.027108d0 0.0138895d0)
+                                              (+ 359.99d0 0.0138895d0) params) 3d0)) 1d-6))
+    (fiveam:is (< (abs (- (interpolate-direction 47.027108d0 359.99d0 params) 1d0)) 1d-6))
+    (fiveam:is (= 0d0 (interpolate-simple 46d0 0d0 params)))
+    (fiveam:is (= 0d0 (interpolate-direction 48d0 0d0 params)))))
+
+(fiveam:test single-node-axes-and-arome-outside
+  (let* ((info (make-gribinfo :grid-size 1 :lat-points 1 :lon-points 1
+                             :lat-start 50d0 :lat-end 50d0 :lon-start -5d0 :lon-end -5d0
+                             :i-inc 1d0 :j-inc 1d0))
+         (params (regular-test-params info)))
+    (fiveam:is (= 1d0 (nth-value 2 (interpolate-uv 50d0 355d0 params))))
+    (fiveam:is (equal '(0d0 0d0 0d0 0d0) (multiple-value-list (interpolate-uv 50d0 -4d0 params)))))
+  (let ((params (spatial-test-params (make-spatial-test-uv '(1d0 3d0 5d0 7d0)))))
+    (fiveam:is (equal '(0d0 0d0 0d0 0d0) (multiple-value-list (interpolate-uv -1d0 0d0 params))))))
 
 ;;; EOF

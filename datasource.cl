@@ -325,8 +325,8 @@ The cycle-run must be a valid run for the datasource when making a datasource in
   (latest-ecmwf-cycle datasource (now) :availability :start))
 
 (defmethod latest-complete-cycle ((datasource (eql 'ecmwf-ifs-wind)) &optional (time (now)))
-  ;; Determine the latest cycle that should'be complete (theoretically) at the given time
-  (make-cycle :timestamp time :interval (* 6 60 60) :delay (* 455 60)))
+  "Select the last nominally complete run using its run-specific safety margin."
+  (latest-ecmwf-cycle datasource time :availability :end))
 
 (defmethod latest-complete-cycle ((datasource (eql 'ecmwf-aifs-wind)) &optional (time (now)))
   (latest-ecmwf-cycle datasource time :availability :end))

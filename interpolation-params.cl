@@ -48,22 +48,45 @@
          (fraction (forecast-fraction fc-0 fc-1 timestamp)))
     (make-params :fc0 fc-0 :fc1 fc-1 :fraction fraction)))
 
-(declaim (inline valid-position))
-(defun valid-position (lat lon info)
+(declaim (inline regular-grid-cell))
+(defun regular-grid-cell (info lat lon)
+  "Return four row-major indices and scan-relative weights, or NIL outside.
+Anchor coordinates to the first GRIB node, not a multiple of the increment at
+0 degrees. Only global longitude grids wrap their last cell to the first node;
+regional grids crossing 0/180 degrees retain finite coverage. Edge nodes and
+one-node axes use repeated indices rather than accessing a nonexistent neighbour."
   (declare (double-float lat lon)
            (type gribinfo info))
-  (let ((lat-start (gribinfo-lat-start info))
-        (lat-end (gribinfo-lat-end info))
-        (lon-start (gribinfo-lon-start info))
-        (lon-end (gribinfo-lon-end info))
-        (j-scan-pos-p (eql (gribinfo-j-scan-pos info) 1))
-        (lon (mod lon 360d0)))
-    (and (if j-scan-pos-p
-             (<= lat-start lat lat-end)
-             (<= lat-end lat lat-start))
-         (or (<= lon-start lon lon-end)
-             (and (<= lon-end lon-start)
-                  (not (<= lon-end lon lon-start)))))))
+  (let ((ni (gribinfo-lon-points info)) (nj (gribinfo-lat-points info))
+        (dx (gribinfo-i-inc info)) (dy (gribinfo-j-inc info)))
+    (unless (and (plusp ni) (plusp nj) (plusp dx) (plusp dy))
+      (return-from regular-grid-cell nil))
+    (let* ((epsilon 1d-7) ; Grid-cell units, for coordinate roundoff only.
+           (row (/ (if (= 1 (gribinfo-j-scan-pos info))
+                       (- lat (gribinfo-lat-start info))
+                       (- (gribinfo-lat-start info) lat)) dy))
+           (offset (mod (if (= 1 (gribinfo-i-scan-neg info))
+                            (- (gribinfo-lon-start info) lon)
+                            (- lon (gribinfo-lon-start info))) 360d0))
+           (column (if (> offset (- 360d0 (* dx epsilon))) 0d0 (/ offset dx)))
+           (global-p (>= (* ni dx) (- 360d0 (* dx epsilon)))))
+      (unless (and (<= (- epsilon) row (+ (1- nj) epsilon))
+                   (or global-p (<= column (+ (1- ni) epsilon))))
+        (return-from regular-grid-cell nil))
+      (setf row (max 0d0 (min (float (1- nj) 1d0) row)))
+      (unless global-p
+        (setf column (min (float (1- ni) 1d0) column)))
+      (let* ((r0 (floor row)) (c0 (floor column))
+             (r1 (min (1+ r0) (1- nj)))
+             (c1 (if global-p (mod (1+ c0) ni) (min (1+ c0) (1- ni)))))
+        (values (+ (* r0 ni) c0) (+ (* r0 ni) c1)
+                (+ (* r1 ni) c0) (+ (* r1 ni) c1)
+                (- row r0) (- column c0))))))
+
+(declaim (inline valid-position))
+(defun valid-position (lat lon info)
+  "Whether the coordinate lies within the regular grid's actual node extent."
+  (not (null (regular-grid-cell info lat lon))))
 
 ;;; EOF
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
