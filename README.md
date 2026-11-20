@@ -1,6 +1,19 @@
 # cl-weather
 Access weather forecasts (NOAA &amp; ECMWF)
 
+Wrap a unit of work in `(cl-weather:with-forecast-access-context () ...)` to keep
+missing GRIB files unavailable for that operation. The context is a fresh,
+dynamically bound table discarded on exit, including error exits. A confirmed
+missing file is remembered by its absolute physical file path, so combined-file
+steps and direction fields share the decision. Repeated samples signal
+`missing-forecast` without reopening the file or repeating its warning; existing
+previous-cycle fallback remains in effect. A newly created file, even if another
+operation puts its fields in the shared cache, stays missing in the original
+context. A fresh context can use it immediately. Successful forecast caching
+remains global; decoding errors and failures on existing files are not remembered.
+Calls outside a context retain their existing behavior. Worker threads must
+establish their own context or explicitly propagate the dynamic binding.
+
 Regular latitude/longitude interpolation uses the first GRIB node, increments,
 dimensions and scan directions. Regional grids may cross Greenwich or the
 antimeridian; only global grids wrap the final cell back to the first column.

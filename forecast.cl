@@ -8,18 +8,67 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Loading forecast data
 
+(defvar *forecast-access-context* nil)
+
+(defmacro with-forecast-access-context (() &body body)
+  "Keep absent files unavailable throughout BODY, without retaining failures globally.
+Each invocation creates a fresh dynamically scoped context. Successful forecasts
+remain shared; corrupt data and other access errors are not remembered."
+  `(let ((*forecast-access-context* (make-hash-table :test #'equal)))
+     ,@body))
+
+(defun forecast-file-path (datasource step)
+  "Identify the actual file, including sources storing multiple steps together."
+  (namestring (merge-pathnames (local-pathname datasource (file-step datasource step)))))
+
+(defun signal-missing-forecast-file (datasource step filename)
+  "Report the current step accurately even when another step first found the file missing."
+  (error 'missing-forecast :cycle (cycle datasource) :offset step
+         :resolution (resolution datasource) :filename filename))
+
+(defun remember-missing-forecast-file (filename)
+  "Remember a confirmed absence once in the active access context."
+  (unless (gethash filename *forecast-access-context*)
+    (setf (gethash filename *forecast-access-context*) t)
+    (log2:warning "Forecast file missing in this access context: ~a" filename)))
+
+(defun load-forecast-file-in-context (datasource step filename)
+  "Avoid native missing-file opens; record only absence, including a deletion during loading."
+  (unless (probe-file filename)
+    (remember-missing-forecast-file filename)
+    (signal-missing-forecast-file datasource step filename))
+  (handler-case (load-datasource-forecasts datasource step)
+    (missing-forecast (e)
+      (unless (probe-file filename)
+        (remember-missing-forecast-file filename))
+      (error e))
+    (missing-file (e)
+      ;; File-based regional sources use MISSING-FILE rather than MISSING-FORECAST.
+      (if (probe-file filename)
+          (error e)
+          (progn
+            (remember-missing-forecast-file filename)
+            (signal-missing-forecast-file datasource step filename))))))
+
 (defmethod load-forecast (datasource step)
   "Return requested U/V data from Cache, fill cache if needed."
   (let ((max (maxstep datasource)))
     (when (> step max)
       (log2:warning "Step ~a out of range, using max (~a)" step max)
       (setf step max))
-    (let* ((key (get-key datasource step)))
+    (let* ((key (get-key datasource step))
+           (filename (when *forecast-access-context* (forecast-file-path datasource step))))
       (bordeaux-threads:with-lock-held (+forecast-ht-lock+)
+        ;; A different context may have populated the shared cache meanwhile.
+        ;; This context must still regard its previously absent file as missing.
+        (when (and filename (gethash filename *forecast-access-context*))
+          (signal-missing-forecast-file datasource step filename))
         (unless (gethash key *forecast-ht*)
           ;; LOAD-DATASOURCE-FORECASTS loads a file, may load multiple steps.
           ;; Caching is performed by that method.
-          (load-datasource-forecasts datasource step))
+          (if filename
+              (load-forecast-file-in-context datasource step filename)
+              (load-datasource-forecasts datasource step)))
         (gethash key *forecast-ht*)))))
 
 (defun get-direction-key (datasource step)

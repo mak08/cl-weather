@@ -33,7 +33,8 @@
   :depends-on ("cl-weather" "fiveam")
   :default-component-class cl-source-file.cl
   :components ((:file "tests/interpolation-tests")
-               (:file "tests/startup-download-tests" :depends-on ("tests/interpolation-tests")))
+               (:file "tests/startup-download-tests" :depends-on ("tests/interpolation-tests"))
+               (:file "tests/forecast-access-tests" :depends-on ("tests/interpolation-tests")))
   :perform (test-op (operation system)
              (declare (ignore operation system))
              (unless (uiop:symbol-call :fiveam :run!
