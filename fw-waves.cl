@@ -37,13 +37,6 @@
   (let ((timestamp (cycle-timestamp cycle)))
     (make-cycle :timestamp (adjust-timestamp timestamp (offset :hour -24)))))
 
-(defmethod latest-complete-cycle ((datasource (eql 'gfswave-combined)) &optional (time (now)))
-  ;; Determine the latest cycle that should'be complete (theoretically) at the given time
-  (let ((*default-timezone* local-time:+utc-zone+))
-    (make-cycle% :timestamp (adjust-timestamp
-                                (adjust-timestamp time (offset :minute (- 300)))
-                              (set :hour 0) (set :minute 0) (set :sec 0)))))
-
 (defconstant 24h (* 24 60 60))
 
 (defmethod timestamp-cycle ((datasource (eql 'gfswave-combined)) timestamp)

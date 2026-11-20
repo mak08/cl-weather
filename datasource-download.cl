@@ -8,13 +8,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; https://confluence.ecmwf.int/spaces/DAC/pages/272310483/Dissemination+schedule
 
-(defun schedule-download (datasource-classname &key (async :datasource))
-  "Schedule downloads for DATASOURCE."
+(defun schedule-download (datasource-classname &key (async :datasource) (clock #'now))
+  "Register publication-start timers from metadata; CLOCK allows deterministic recovery tests."
   (ecase async ((:none :datasource :step)))
   (dolist (run (schedule-runs (datasource-schedule datasource-classname)))
     (let* ((scheduled-run run)
-           (cycle (cycle-for-run datasource-classname scheduled-run))
-           (schedule (schedule (get-datasource datasource-classname cycle)))
+           (cycle (cycle-for-run datasource-classname scheduled-run (funcall clock)))
+           (schedule (datasource-schedule-for-cycle datasource-classname cycle))
            (start (schedule-dissem-start schedule))
            (hour (mod (+ scheduled-run (truncate start 60)) 24))
            (minute (mod start 60)))
@@ -23,7 +23,7 @@
       (timers:add-timer
        (lambda ()
          (let* ((timestamp
-                  (adjust-timestamp (now) (offset :minute (- start))))
+                  (adjust-timestamp (funcall clock) (offset :minute (- start))))
                 (datasource
                   (get-datasource datasource-classname
                                   (cycle-for-run datasource-classname
@@ -31,28 +31,6 @@
            (download-datasource datasource :async async)))
        :hours (list hour)
        :minutes (list minute)))))
-
-(defun cycle-for-run (datasource-classname run &optional (time (now)))
-  (let* ((runs (sort (copy-list
-                      (schedule-runs (datasource-schedule datasource-classname)))
-                     #'<))
-         (interval-hours
-           (loop :for (current next) :on
-                     (append runs (list (+ 24 (first runs))))
-                 :while next
-                 :minimize (- next current))))
-    (loop :with cycle = (make-cycle :timestamp time
-                                    :interval (* interval-hours 60 60))
-          :repeat (ceiling 24 interval-hours)
-        :when (= (cycle-run cycle) run)
-          :do (return cycle)
-        :do (setf cycle (make-cycle
-                         :timestamp (adjust-timestamp
-                                     (cycle-timestamp cycle)
-                                     (offset :hour (- interval-hours)))
-                         :interval (* interval-hours 60 60)))
-        :finally (error "No cycle for run ~a in datasource ~a at ~a"
-                        run datasource-classname time))))
 
 (defmethod download-datasource ((datasource ecmwf-datasource) &key (async :none))
   (ecase async

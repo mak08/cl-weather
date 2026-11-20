@@ -39,11 +39,6 @@
 (defmethod current-cycle ((datasource (eql 'fw-current-english-channel)))
   (current-cycle-fw))
 
-(defmethod latest-complete-cycle ((datasource (eql 'fw-current-agulhas)) &optional (time (now)))
-  (latest-complete-cycle-fw time))
-(defmethod latest-complete-cycle ((datasource (eql 'fw-current-english-channel)) &optional (time (now)))
-  (latest-complete-cycle-fw time))
-
 (defmethod timestamp-cycle ((datasource (eql 'fw-current-agulhas)) timestamp)
   (timestamp-cycle-fw datasource timestamp))
 (defmethod timestamp-cycle ((datasource (eql 'fw-current-english-channel)) timestamp)
@@ -108,13 +103,6 @@
   (make-cycle :timestamp (universal-to-timestamp
                           (* 24h (floor (timestamp-to-universal
                                          (adjust-timestamp (now) (offset :hour -12))) 24h)))))
-
-(defun latest-complete-cycle-fw (time)
-  ;; Determine the latest cycle that should'be complete (theoretically) at the given time
-  (let ((*default-timezone* local-time:+utc-zone+))
-    (make-cycle% :timestamp (adjust-timestamp
-                                (adjust-timestamp time (offset :minute (- 300)))
-                              (set :hour 0) (set :minute 0) (set :sec 0)))))
 
 (defun timestamp-cycle-fw (datasource timestamp)
   (let* ((current-cycle (current-cycle datasource)))

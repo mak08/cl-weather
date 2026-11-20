@@ -146,7 +146,7 @@ The cycle-run must be a valid run for the datasource when making a datasource in
 
 (defgeneric latest-complete-cycle (datasource-id &optional time)
   (:documentation
-   "EQL methods on datasource name to determine the latest cycle that should'be complete (theoretically) at the given time"))
+   "Latest nominally complete cycle according to datasource publication metadata."))
 
 (defgeneric timestamp-cycle (datasource-id timestamp)
   (:documentation
@@ -225,6 +225,55 @@ The cycle-run must be a valid run for the datasource when making a datasource in
 
 (defstruct schedule runs steps dissem-start dissem-end)
 
+(defun cycle-for-run (datasource run &optional (time (now)))
+  "Return the latest occurrence of a scheduled UTC run, including irregular run sets."
+  (unless (member run (schedule-runs (datasource-schedule datasource)))
+    (error "Run ~a is not scheduled for ~a" run datasource))
+  (let* ((seconds (timestamp-to-unix time))
+         (candidate (+ (* 86400 (floor seconds 86400)) (* run 3600))))
+    (make-cycle% :timestamp (unix-to-timestamp (if (> candidate seconds) (- candidate 86400) candidate)))))
+
+(defun available-cycle-for-run (datasource run time availability)
+  "Find this run's latest occurrence whose configured publication threshold has passed."
+  (loop for cycle = (cycle-for-run datasource run time)
+          then (make-cycle% :timestamp (unix-to-timestamp (- (timestamp-to-unix (cycle-timestamp cycle)) 86400)))
+        for schedule = (datasource-schedule-for-cycle datasource cycle)
+        for minutes = (ecase availability
+                        (:start (schedule-dissem-start schedule))
+                        (:end (schedule-dissem-end schedule)))
+        when (>= (timestamp-difference time (cycle-timestamp cycle)) (* 60 minutes))
+          return cycle))
+
+(defun latest-scheduled-cycle (datasource time &key (availability :start))
+  "Select the latest available run from publication metadata, independent of routing policy."
+  (loop with latest = nil
+        for run in (schedule-runs (datasource-schedule datasource))
+        for cycle = (available-cycle-for-run datasource run time availability)
+        when (or (null latest) (timestamp> (cycle-timestamp cycle) (cycle-timestamp latest)))
+          do (setf latest cycle)
+        finally (return (or latest (error "No scheduled runs for ~a" datasource)))))
+
+(defun publishing-cycles (datasource time)
+  "Return publishing runs from their metadata, allowing overlapping release windows."
+  (loop for run in (schedule-runs (datasource-schedule datasource))
+        for cycle = (available-cycle-for-run datasource run time :start)
+        for schedule = (datasource-schedule-for-cycle datasource cycle)
+        when (<= (timestamp-difference time (cycle-timestamp cycle))
+                 (* 60 (schedule-dissem-end schedule)))
+          collect cycle))
+
+(defmethod current-cycle ((datasource t))
+  "Default routing cycle is the latest run whose publication has started."
+  (latest-scheduled-cycle datasource (now) :availability :start))
+
+(defmethod latest-complete-cycle ((datasource t) &optional (time (now)))
+  "Default completion selection follows the datasource's run-specific metadata."
+  (latest-scheduled-cycle datasource time :availability :end))
+
+(defun latest-ecmwf-cycle (datasource time &key availability)
+  "Compatibility entry point; availability selection is shared by all GRIB sources."
+  (latest-scheduled-cycle datasource time :availability availability))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Range
 
@@ -281,7 +330,8 @@ The cycle-run must be a valid run for the datasource when making a datasource in
     (make-cycle :timestamp (adjust-timestamp timestamp (offset :hour hours)))))
   
 (defmethod cycle-updating-p ((datasource t) &optional (time (now)))
-  (< 210 (mod (day-minute time) 360) 300))
+  "Identify active publication windows from datasource metadata."
+  (not (null (publishing-cycles datasource time))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; ECMWF
@@ -316,44 +366,8 @@ The cycle-run must be a valid run for the datasource when making a datasource in
                  :dissem-start 345
                  :dissem-end 484))
 
-(defmethod current-cycle ((datasource (eql 'ecmwf-ifs-wind)))
-  "Cycle currently used by the router."
-  ;; IFS Open Data starts arriving 5h45 after each six-hourly cycle.
-  (make-cycle :timestamp (now) :interval (* 6 60 60) :delay (* 345 60)))
-
-(defmethod current-cycle ((datasource (eql 'ecmwf-aifs-wind)))
-  (latest-ecmwf-cycle datasource (now) :availability :start))
-
-(defmethod latest-complete-cycle ((datasource (eql 'ecmwf-ifs-wind)) &optional (time (now)))
-  "Select the last nominally complete run using its run-specific safety margin."
-  (latest-ecmwf-cycle datasource time :availability :end))
-
-(defmethod latest-complete-cycle ((datasource (eql 'ecmwf-aifs-wind)) &optional (time (now)))
-  (latest-ecmwf-cycle datasource time :availability :end))
-
-(defun latest-ecmwf-cycle (datasource time &key availability)
-  (loop :with cycle = (make-cycle :timestamp time :interval (* 6 60 60))
-        :repeat 8
-        :for source = (get-datasource datasource cycle)
-        :for schedule = (schedule source)
-        :for elapsed = (timestamp-difference time (cycle-timestamp cycle))
-        :for threshold = (ecase availability
-                           (:start (schedule-dissem-start schedule))
-                           (:end (schedule-dissem-end schedule)))
-        :when (>= elapsed (* threshold 60))
-          :do (return cycle)
-        :do (setf cycle (previous-cycle datasource cycle))
-        :finally (return cycle)))
-
 (defmethod previous-cycle ((datasource (eql 'ecmwf-aifs-wind)) cycle)
   (move-cycle cycle :hours -6))
-
-(defmethod cycle-updating-p ((datasource (eql 'ecmwf-aifs-wind)) &optional (time (now)))
-  (let* ((cycle (make-cycle :timestamp time :interval (* 6 60 60)))
-         (schedule (schedule (get-datasource datasource cycle)))
-         (elapsed (timestamp-difference time (cycle-timestamp cycle))))
-    (and (>= elapsed (* (schedule-dissem-start schedule) 60))
-         (<= elapsed (* (schedule-dissem-end schedule) 60)))))
 
 (defmethod maxstep ((datasource ecmwf-aifs-wind))
   (car (last (schedule-steps (schedule datasource)))))
@@ -385,13 +399,6 @@ The cycle-run must be a valid run for the datasource when making a datasource in
 (defmethod next-forecast ((datasource ecmwf-aifs-wind) forecast)
   (or (find-if (lambda (step) (> step forecast)) (schedule-steps (schedule datasource)))
       forecast))
-
-(defmethod cycle-updating-p ((datasource (eql 'ecmwf-ifs-wind)) &optional (time (now)))
-  (let* ((cycle (make-cycle :timestamp time :interval (* 6 60 60) :delay (* 345 60)))
-         (run (cycle-run cycle))
-         (elapsed (truncate (timestamp-difference time (cycle-timestamp cycle)) 60))
-         (end (if (member run '(0 12)) 454 387)))
-    (<= 345 elapsed end)))
 
 (defmethod maxstep ((datasource ecmwf-ifs-datasource))
   (car (last (schedule-steps (schedule datasource)))))
@@ -464,21 +471,9 @@ The cycle-run must be a valid run for the datasource when making a datasource in
   "Honor the shorter forecast horizon of 06/18Z IFS runs."
   (datasource-schedule-for-cycle 'ecmwf-ifs-wind cycle))
 
-(defmethod current-cycle ((source (eql 'ecmwf-ifs-current)))
-  "Select the same nominally available run as IFS wind."
-  (current-cycle 'ecmwf-ifs-wind))
-
-(defmethod latest-complete-cycle ((source (eql 'ecmwf-ifs-current)) &optional (time (now)))
-  "Select the nominally complete IFS run at TIME."
-  (latest-complete-cycle 'ecmwf-ifs-wind time))
-
 (defmethod timestamp-cycle ((source (eql 'ecmwf-ifs-current)) timestamp)
   "Choose an IFS cycle whose forecast horizon includes TIMESTAMP."
   (timestamp-cycle 'ecmwf-ifs-wind timestamp))
-
-(defmethod cycle-updating-p ((source (eql 'ecmwf-ifs-current)) &optional (time (now)))
-  "Use the IFS wind dissemination window for current downloads."
-  (cycle-updating-p 'ecmwf-ifs-wind time))
 
 (defmethod index-uri ((source ecmwf-ifs-current) step)
   "Read current byte ranges from the shared IFS atmospheric index."
@@ -507,13 +502,6 @@ The cycle-run must be a valid run for the datasource when making a datasource in
   (let ((timestamp (cycle-timestamp cycle)))
     (make-cycle :timestamp (adjust-timestamp timestamp (offset :hour -6)))))
   
-(defmethod cycle-updating-p ((datasource (eql 'noaa-gfs-wind)) &optional (time (now)))
-  (< 210 (mod (day-minute time) 360) 300))
-
-(defmethod latest-complete-cycle ((datasource (eql 'noaa-gfs-wind)) &optional (time (now)))
-  ;; Determine the latest cycle that should'be complete (theoretically) at the given time
-  (make-cycle :timestamp (adjust-timestamp time (offset :minute (- 300)))))
-
 (defmethod timestamp-cycle ((datasource (eql 'noaa-gfs-wind)) timestamp)
   (let* ((current-cycle (current-cycle datasource))
          (cycle-time (cycle-timestamp current-cycle))
@@ -592,20 +580,6 @@ The cycle-run must be a valid run for the datasource when making a datasource in
                  :dissem-start 210
                  :dissem-end 350))
 
-(defmethod latest-complete-cycle ((datasource (eql 'noaa-rtofs-current)) &optional (time (now)))
-  ;; Determine the latest cycle that should'be complete (theoretically) at the given time
-  (let ((*default-timezone* local-time:+utc-zone+))
-    (make-cycle% :timestamp (adjust-timestamp
-                                (adjust-timestamp time (offset :minute (- 300)))
-                              (set :hour 0) (set :minute 0) (set :sec 0)))))
-  
-(defmethod file-step ((datasource noaa-rtofs-current) step)
-  (let ((file-steps (schedule-steps (schedule datasource))))
-    (loop
-      :for file-step :in file-steps
-      :when (>= file-step step)
-        :do (return file-step))))
-
 (defmethod get-grib-file-ranges ((datasource noaa-rtofs-current) step)
   (error "No ranges available for NOAA RTOFS"))
 
@@ -644,13 +618,6 @@ The cycle-run must be a valid run for the datasource when making a datasource in
   (let ((timestamp (cycle-timestamp cycle)))
     (make-cycle :timestamp (adjust-timestamp timestamp (offset :hour -6)))))
 
-(defmethod cycle-updating-p ((datasource (eql 'arome-wind)) &optional (time (now)))
-  (< 150 (mod (day-minute time) 360) 300))
-
-(defmethod latest-complete-cycle ((datasource (eql 'arome-wind)) &optional (time (now)))
-  ;; Determine the latest cycle that should be complete (theoretically) at the given time
-  (make-cycle :timestamp (adjust-timestamp time (offset :minute (- 300)))))
-
 (defmethod timestamp-cycle ((datasource (eql 'arome-wind)) timestamp)
   (let* ((current-cycle (current-cycle datasource))
          (cycle-time (cycle-timestamp current-cycle))
@@ -678,13 +645,6 @@ The cycle-run must be a valid run for the datasource when making a datasource in
 (defmethod previous-cycle ((datasource arome-wind) cycle)
   (let ((timestamp (cycle-timestamp cycle)))
     (make-cycle :timestamp (adjust-timestamp timestamp (offset :hour -6)))))
-
-(defmethod cycle-updating-p ((datasource arome-wind) &optional (time (now)))
-  (< 150 (mod (day-minute time) 360) 300))
-
-(defmethod latest-complete-cycle ((datasource arome-wind) &optional (time (now)))
-  ;; Determine the latest cycle that should be complete (theoretically) at the given time
-  (make-cycle :timestamp (adjust-timestamp time (offset :minute (- 300)))))
 
 (defmethod timestamp-cycle ((datasource arome-wind) timestamp)
   (let* ((current-cycle (current-cycle datasource))

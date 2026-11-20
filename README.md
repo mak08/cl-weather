@@ -13,9 +13,23 @@ Interpolation regression tests are in `tests/interpolation-tests.cl`, loaded by
 `asdf:test-system "cl-weather"`. They include offset regional grids such as IBI,
 scan directions, longitude wrapping, edge nodes and out-of-region samples.
 
-ECMWF cycle selection follows the configured dissemination schedule. IFS and
+Download availability is shared across all sources. `cycle-for-run` selects UTC
+run timestamps from `schedule-runs`, including daily and irregular schedules.
+`latest-scheduled-cycle` and `publishing-cycles` read the run-specific
+`dissem-start` and `dissem-end` metadata. Default completion/in-progress selectors,
+startup recovery and recurring timers use this common logic. Startup recovers the
+latest complete cycle and all publishing cycles, with duplicates removed. It does
+not use routing-specific cycle-selection heuristics.
+
+ECMWF routing cycle selection also uses these common defaults. IFS and
 AIFS start at +5h45. Nominal completion (including a 30-minute safety margin)
 is +8h04 for IFS 00/12Z and all AIFS runs, and +6h57 for IFS 06/18Z.
-IFS currents share the IFS wind schedule. The latest-complete selector uses
-these run-specific thresholds rather than a separate fixed delay; tests cover
-one second before, at and after each boundary, including day rollover.
+IFS currents share the IFS wind schedule. There are no separate IFS/AIFS
+completion or in-progress timing implementations. Existing GFS, AROME and
+Fairwinds routing selection policies remain specialized; they do not determine
+download timing. URL construction, forecast step selection, transfer/retry
+strategies and GRIB decoding retain their source-specific methods.
+
+Scheduling tests cover every configured source, exact publication boundaries,
+day rollover, overlapping windows, irregular run hours, metadata changes and
+recurring timer callbacks. Tests use disposable stubs and never start downloads.

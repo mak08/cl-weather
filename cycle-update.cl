@@ -18,18 +18,18 @@
                               fw-current-agulhas
                               fw-current-english-channel))
 
-(defun start-cycle-updates ()
-  ;; Download the latest complete cycle
+(defun startup-download-cycles (datasource time)
+  "Plan completed and publishing runs at one timestamp, without duplicate downloads."
+  (remove-duplicates
+   (cons (latest-scheduled-cycle datasource time :availability :end)
+         (publishing-cycles datasource time))
+   :test (lambda (a b) (timestamp= (cycle-timestamp a) (cycle-timestamp b)))))
+
+(defun start-cycle-updates (&optional (time (now)))
+  "Recover complete and in-progress runs before enabling periodic downloads."
   (dolist (datasource *datasources*)
-    (cl-weather::download-datasource
-     (get-datasource datasource (latest-complete-cycle datasource))
-     :async :datasource))
-  ;; When a cycle is currently being output, start download immediately
-  (dolist (datasource *datasources*)
-    (when (cycle-updating-p datasource)
-      (cl-weather::download-datasource
-       (get-datasource datasource (current-cycle datasource))
-       :async :datasource)))
+    (dolist (cycle (startup-download-cycles datasource time))
+      (download-datasource (get-datasource datasource cycle) :async :datasource)))
 
   ;; Now we can leave it to the 4/24 update. 
   (dolist (datasource *datasources*)
